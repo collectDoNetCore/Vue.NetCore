@@ -46,6 +46,7 @@
             <div v-else-if="column.edit" class="edit-el">
               <div v-if="column.edit.keep|| edit.rowIndex==scope.$index" class="e-item">
                 <div>
+                  <!-- 2020.07.24增加日期onChange事件 -->
                   <DatePicker
                     :transfer="true"
                     v-if="column.edit.type=='date'||column.edit.type=='datetime'"
@@ -53,7 +54,7 @@
                     :format="column.edit.type=='date'? 'yyyy-MM-dd':'yyyy-MM-dd HH:mm:ss'"
                     :placeholder="column.title"
                     :value="scope.row[column.field]"
-                    @on-change="(time)=>{scope.row[column.field]=time; return time}"
+                    @on-change="(time)=>{scope.row[column.field]=time; column.onChange&&column.onChange(time,column); return time}"
                   ></DatePicker>
                   <i-switch
                     v-else-if="column.edit.type=='switch'"
@@ -137,6 +138,12 @@
                 @click="formatterClick(scope.row,column)"
                 v-html="column.formatter(scope.row,column)"
               ></div>
+               <!--2020.09.06增加table有数据源的列，可以移除或自定义显示背景颜色及点击事件-->
+              <div
+                v-else-if="(column.bind&&column.normal)"
+                @click="formatterClick(scope.row,column)"
+                :style="column.getStyle&&column.getStyle(scope.row,column)"
+              >{{formatter(scope.row,column,true)}}</div>
               <div
                 v-else-if="column.click"
                 @click="formatterClick(scope.row,column)"
@@ -162,7 +169,7 @@
         @size-change="handleSizeChange"
         @current-change="handleCurrentChange"
         :current-page="paginations.page"
-        :page-sizes="[30, 60, 100,300,500]"
+        :page-sizes="paginations.sizes"
         :page-size="paginations.size"
         layout="total, sizes, prev, pager, next, jumper"
         :total="paginations.total"
@@ -181,11 +188,11 @@ export default {
       type: Array,
       default: () => {
         return [];
-      }
+      },
     },
     columns: {
       type: Array,
-      default: []
+      default: [],
       //[ {
       //   field: "columnType",
       //   title: "数据类型",
@@ -197,90 +204,90 @@ export default {
     },
     height: {
       type: Number,
-      default: 0
+      default: 0,
     },
     maxHeight: {
       type: Number,
-      default: 0
+      default: 0,
     },
     linkView: {
       type: Function,
-      default: function() {
+      default: function () {
         return 1;
-      }
+      },
     },
     pagination: {
       type: Object,
-      default: function() {
+      default: function () {
         return { total: 0, size: 0, sortName: "" };
-      }
+      },
     },
     url: {
       type: String,
-      default: ""
+      default: "",
     },
     paginationHide: {
       type: Boolean,
-      default: true
+      default: true,
     },
     color: {
       type: Boolean,
-      default: true
+      default: true,
     },
     index: {
       //是否创建索引号,如果需要表格编辑功能，这里需要设置为true
       type: Boolean,
-      default: false
+      default: false,
     },
     allowEmpty: {
       //表格数据为空时是否默认为--
       type: Boolean,
-      default: true
+      default: true,
     },
     defaultLoadPage: {
       //传入了url，是否默认加载表格数据
       type: Boolean,
-      default: true
+      default: true,
     },
     loadKey: {
       //是否自动从后台加载数据源,如【审核状态】字段是的值是数字，但要显示对应的文字，1=审核中，2=审核通过
       type: Boolean,
-      default: false
+      default: false,
     },
     single: {
       type: Boolean, //是否单选
-      default: false
+      default: false,
     },
     doubleEdit: {
       type: Boolean, //是否双击启用编辑功能
-      default: true
+      default: true,
     },
     beginEdit: {
       //编辑开始
       type: Function,
-      default: function(row, column, index) {
+      default: function (row, column, index) {
         return true;
-      }
+      },
     },
     endEditBefore: {
       //结束编辑前
       type: Function,
-      default: function(row, column, index) {
+      default: function (row, column, index) {
         return true;
-      }
+      },
     },
     endEditAfter: {
       //结束编辑前
       type: Function,
-      default: function(row, column, index) {
+      default: function (row, column, index) {
         return true;
-      }
+      },
     },
     ck: {
       //是否显示checkbox
       type: Boolean,
-      default: true
-    }
+      default: true,
+    },
   },
   data() {
     return {
@@ -296,27 +303,22 @@ export default {
       total: 0,
       formatConfig: {},
       defaultColor: "default",
+      //2020.09.06调整table列数据源的背景颜色
       colors: [
-        "success",
-        "primary",
-        "error",
-        "warning",
-        "magenta",
-        "red",
-        "volcano",
-        "orange",
-        "gold",
-        "green",
         "cyan",
+        "red",
         "blue",
+        "green",
+        "magenta",
         "geekblue",
-        "#FFA2D3",
-        "default"
+        "gold",
+        "orange",
+        "default",
       ],
       rule: {
         phone: /^[1][3,4,5,6,7,8,9][0-9]{9}$/,
         decimal: /(^[\-0-9][0-9]*(.[0-9]+)?)$/,
-        number: /(^[\-0-9][0-9]*([0-9]+)?)$/
+        number: /(^[\-0-9][0-9]*([0-9]+)?)$/,
       },
       columnNames: [],
       rowData: [],
@@ -325,10 +327,12 @@ export default {
         order: "desc",
         Foots: "",
         total: 0,
-        size: 0,
+        //2020.08.29增加自定义分页条大小
+        sizes: [30, 60, 100, 120],
+        size: 30, //默认分页大小
         Wheres: [],
         page: 1,
-        rows: 30
+        rows: 30,
       },
       errorFiled: "",
       edit: { columnIndex: -1, rowIndex: -1 }, //当前双击编辑的行与列坐标
@@ -337,7 +341,7 @@ export default {
       //目前只支持从后台返回的summaryData数据
       summaryData: [],
       summaryIndex: {},
-      remoteColumns: [] //需要每次刷新或分页后从后台加载字典数据源的列配置
+      remoteColumns: [], //需要每次刷新或分页后从后台加载字典数据源的列配置
     };
   },
   created() {
@@ -372,26 +376,36 @@ export default {
       }
     });
     if (keys.length > 0) {
-      this.http.post("/api/Sys_Dictionary/GetVueDictionary", keys).then(dic => {
-        dic.forEach(x => {
-          columnBind.forEach(c => {
-            //转换数据源的类型与列的类型一致(2020.04.04)
-            if (c.valueTyoe == "int" || c.valueTyoe == "sbyte") {
-              x.data.forEach(d => {
-                d.key = ~~d.key;
-              });
-            }
-            if (c.key == x.dicNo) c.data.push(...x.data);
+      this.http
+        .post("/api/Sys_Dictionary/GetVueDictionary", keys)
+        .then((dic) => {
+          dic.forEach((x) => {
+            columnBind.forEach((c) => {
+              //转换数据源的类型与列的类型一致(2020.04.04)
+              if (c.valueTyoe == "int" || c.valueTyoe == "sbyte") {
+                x.data.forEach((d) => {
+                  //2020.09.01增加对数字类型的二次判断
+                  if (!isNaN(d.key)) {
+                    d.key = ~~d.key;
+                  }
+                });
+              }
+              if (c.key == x.dicNo) c.data.push(...x.data);
+            });
           });
         });
-      });
     }
 
     this.paginations.sort = this.pagination.sortName;
-    this.enableEdit = this.columns.some(x => {
+    //2020.08.29增加自定义分页条大小
+    Object.assign(this.paginations, this.pagination);
+    if (this.pagination.size) {
+      this.paginations.rows = this.pagination.size;
+    }
+    this.enableEdit = this.columns.some((x) => {
       return x.hasOwnProperty("edit");
     });
-    let keyColumn = this.columns.find(x => {
+    let keyColumn = this.columns.find((x) => {
       return x.isKey;
     });
     if (keyColumn) {
@@ -414,7 +428,7 @@ export default {
         file.path,
         file.name,
         {
-          Authorization: this.$store.getters.getToken()
+          Authorization: this.$store.getters.getToken(),
         },
         this.http.ipAddress
       );
@@ -431,7 +445,7 @@ export default {
           if (splitFile.length > 0) {
             fileInfo.push({
               name: splitFile[splitFile.length - 1],
-              path: this.base.isUrl(file) ? file : this.http.ipAddress + file
+              path: this.base.isUrl(file) ? file : this.http.ipAddress + file,
             });
           }
         }
@@ -448,7 +462,7 @@ export default {
       }
       if (!this.paginationHide) {
         this.paginations.page = 1;
-        this.paginations.rows = 30;
+        // this.paginations.rows = 30;
         if (this.paginations.wheres && this.paginations.wheres.length > 0) {
           this.paginations.wheres.splice(0);
         }
@@ -498,7 +512,7 @@ export default {
     },
     toggleEdit(event) {},
     setEditStatus(status) {
-      this.columns.forEach(x => {
+      this.columns.forEach((x) => {
         if (x.hasOwnProperty("edit")) {
           this.$set(x.edit, "status", status);
         }
@@ -585,7 +599,8 @@ export default {
           typeof option.edit.max == "number" &&
           val > option.edit.max
         ) {
-          this.$Message.error(option.title + "不能大于" + option.edit.min);
+          //2020.09.26修复表格验证最大值取值错误的问题
+          this.$Message.error(option.title + "不能大于" + option.edit.max);
           return false;
         }
         return true;
@@ -637,7 +652,7 @@ export default {
         let data = (this.url ? this.rowData : this.tableData)[
           this.edit.rowIndex
         ];
-        let option = this.columns.find(x => {
+        let option = this.columns.find((x) => {
           return x.field == column.property;
         });
         if (!option || !option.edit) {
@@ -705,10 +720,13 @@ export default {
       if (!row) {
         row = {};
       }
-      this.columns.forEach(x => {
-        if (x.edit && x.edit.type == "switch") {
-          if (!row.hasOwnProperty(x.field)) {
+      this.columns.forEach((x) => {
+        if (!row.hasOwnProperty(x.field)) {
+          if (x.edit && x.edit.type == "switch") {
             row[x.field] = x.type == "bool" ? false : 0;
+          } else if (!row.hidden) {
+            //2020.09.06添加行时，设置默认字段
+            row[x.field] = undefined;
           }
         }
       });
@@ -733,7 +751,7 @@ export default {
         //只有设置了属性index才有索引行
         return [];
       }
-      let indexArr = this.$refs.table.selection.map(x => {
+      let indexArr = this.$refs.table.selection.map((x) => {
         return x.elementIdex;
       });
       return indexArr ? indexArr : [];
@@ -747,7 +765,7 @@ export default {
         //  column.bind.data.splice(0);
         let key = column.bind.key;
         let data = [];
-        rows.forEach(row => {
+        rows.forEach((row) => {
           if (data.indexOf(row[column.field]) == -1) {
             data.push(row[column.field]);
           }
@@ -760,9 +778,9 @@ export default {
       //ha= Object.assign([], ha, hb)
       this.http
         .post("/api/Sys_Dictionary/GetTableDictionary", remoteInfo)
-        .then(dic => {
-          dic.forEach(x => {
-            this.remoteColumns.forEach(column => {
+        .then((dic) => {
+          dic.forEach((x) => {
+            this.remoteColumns.forEach((column) => {
               if (column.bind.key == x.key) {
                 column.bind.data = Object.assign([], column.bind.data, x.data);
                 //column.bind.data.push(...x.data);
@@ -782,7 +800,7 @@ export default {
         rows: this.paginations.rows,
         sort: this.paginations.sort,
         order: this.paginations.order,
-        wheres: [] //查询条件，格式为[{ name: "字段", value: "xx" }]
+        wheres: [], //查询条件，格式为[{ name: "字段", value: "xx" }]
       };
       let status = true;
       //合并查询信息(包查询分页、排序、查询条件等)
@@ -795,7 +813,7 @@ export default {
           callBack(true);
         })
       */
-      this.$emit("loadBefore", param, result => {
+      this.$emit("loadBefore", param, (result) => {
         status = result;
       });
       if (!status) return;
@@ -805,10 +823,10 @@ export default {
       }
       this.loading = true;
       this.http.post(this.url, param).then(
-        data => {
+        (data) => {
           this.loading = false;
           //查询返回结果后处理
-          this.$emit("loadAfter", data.rows || [], result => {
+          this.$emit("loadAfter", data.rows || [], (result) => {
             status = result;
           });
           if (!status) return;
@@ -818,7 +836,7 @@ export default {
           //合计
           this.getSummaries(data);
         },
-        error => {
+        (error) => {
           this.loading = false;
           // this.$Message.error(error || "网络异常");
         }
@@ -831,7 +849,7 @@ export default {
       if (this.ck) {
         this.summaryData.push(0);
       }
-      this.columns.forEach(col => {
+      this.columns.forEach((col) => {
         if (!col.hidden) {
           if (data.summary.hasOwnProperty(col.field)) {
             this.summaryData.push(data.summary[col.field]);
@@ -846,7 +864,7 @@ export default {
     },
     getInputChangeSummaries() {},
     filterColumns() {
-      return this.columns.filter(x => {
+      return this.columns.filter((x) => {
         return !x.hidden;
       });
     },
@@ -865,7 +883,7 @@ export default {
     },
     resetPage() {
       //重置查询分页
-      this.paginations.rows = 30;
+      // this.paginations.rows = 30;
       this.paginations.page = 1;
     },
     selectionChange(selection) {
@@ -934,7 +952,7 @@ export default {
       ) {
         return this.getSelectFormatter(column, val);
       }
-      let source = column.bind.data.filter(x => {
+      let source = column.bind.data.filter((x) => {
         // return x.key != "" && x.key == val;
         //2020.06.06修复单独使用table组件时,key为数字0时转换成文本失败的问题
         return x.key !== "" && x.key !== undefined && x.key + "" === val + "";
@@ -946,7 +964,7 @@ export default {
       //编辑多选table显示
       let valArr = val.split(",");
       for (let index = 0; index < valArr.length; index++) {
-        column.bind.data.forEach(x => {
+        column.bind.data.forEach((x) => {
           //2020.06.06修复数据源为selectList时,key为数字0时不能转换文本的问题
           if (
             x.key !== "" &&
@@ -960,8 +978,9 @@ export default {
       return valArr.join(",");
     },
     onChange(scope, val, event, column) {
+      //2020.09.03修复onChange不触发的问题
       let row = scope.row;
-      if (row.onChange && !row.onChange(row, val, event)) {
+      if (column.onChange && !column.onChange(row, val, event)) {
         return;
       }
       //输入框求和实时计算
@@ -980,8 +999,8 @@ export default {
         }
       });
       this.$set(this.summaryData, this.summaryIndex[column.field] - 1, sum);
-    }
-  }
+    },
+  },
 };
 </script>
 <style lang="less" scoped>
