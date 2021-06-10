@@ -511,7 +511,7 @@ namespace VOL.Core.BaseProvider
         /// <param name="keys">主键key</param>
         /// <param name="delList">是否连明细一起删除</param>
         /// <returns></returns>
-        public virtual int Delete(object[] keys, bool delList = false)
+        public virtual int DeleteWithKeys(object[] keys, bool delList = false)
         {
             Type entityType = typeof(TEntity);
             string tKey = entityType.GetKeyProperty().Name;
@@ -520,14 +520,25 @@ namespace VOL.Core.BaseProvider
                  ? string.Join(",", keys)
                  : $"'{string.Join("','", keys)}'";
 
-            string sql = $"DELETE FROM {entityType.Name } where {tKey} in ({joinKeys});";
+            string sql = $"DELETE FROM {entityType.GetEntityTableName() } where {tKey} in ({joinKeys});";
             if (delList)
             {
                 Type detailType = entityType.GetCustomAttribute<EntityAttribute>().DetailTable?[0];
                 if (detailType != null)
-                    sql = sql + $"DELETE FROM {detailType.Name} where {tKey} in ({joinKeys});";
+                    sql = sql + $"DELETE FROM {detailType.GetEntityTableName()} where {tKey} in ({joinKeys});";
             }
             return ExecuteSqlCommand(sql);
+        }
+
+
+        public virtual Task AddAsync(TEntity entities)
+        {
+            return DBSet.AddRangeAsync(entities);
+        }
+
+        public virtual Task AddRangeAsync(TEntity entities)
+        {
+            return DBSet.AddRangeAsync(entities);
         }
 
         public virtual void Add(TEntity entities, bool saveChanges = false)
@@ -576,7 +587,7 @@ namespace VOL.Core.BaseProvider
         {
             return EFContext.SaveChangesAsync();
         }
-      
+
         public virtual int ExecuteSqlCommand(string sql, params SqlParameter[] sqlParameters)
         {
             return DbContext.Database.ExecuteSqlRaw(sql, sqlParameters);
@@ -597,7 +608,7 @@ namespace VOL.Core.BaseProvider
         /// <returns></returns>
         public virtual IQueryable<TEntity> FromSqlInterpolated([NotNull] FormattableString sql)
         {
-           //DBSet.FromSqlInterpolated(sql).Select(x => new { x,xxx}).ToList();
+            //DBSet.FromSqlInterpolated(sql).Select(x => new { x,xxx}).ToList();
             return DBSet.FromSqlInterpolated(sql);
         }
 

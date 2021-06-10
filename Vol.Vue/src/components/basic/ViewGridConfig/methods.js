@@ -166,6 +166,7 @@ let methods = {
           name: "保 存",
           icon: "md-checkmark",
           type: "error",
+          value: "save",
           onClick() {
             this.save();
           }
@@ -222,6 +223,12 @@ let methods = {
     }
   },
   emptyValue(value) {
+    if (typeof value == 'string' && value.trim() === "") {
+      return true;
+    }
+    if (value instanceof Array && !value.length) {
+      return true;
+    }
     return value === null || value === undefined || value === "";
   },
   getSearchParameters() {
@@ -235,32 +242,43 @@ let methods = {
     for (const key in this._searchFormFields) {
       let value = this._searchFormFields[key];
       if (this.emptyValue(value)) continue;
+
       if (typeof value == "number") {
         value = value + "";
       }
       let displayType = this.getSearchItem(key);
+
+      //联级只保留选中节点的最后一个值
+      if (displayType == "cascader") {
+        //查询下面所有的子节点，如：选中的是父节点，应该查询下面所有的节点数据--待完
+        value = value.length ? (value[value.length - 1] + "") : "";
+      }
+      //2021.05.02增加区间查询
       if (
         typeof value == "string" ||
-        ["date", "datetime"].indexOf(displayType) == -1
+        ["date", "datetime", "range"].indexOf(displayType) == -1
       ) {
+
         query.wheres.push({
           name: key,
-          value: typeof value == "string" || !value ? value : value.join(","),
+          value: typeof value == "string" ? (value + '').trim() : value.join(","),
           displayType: displayType
         });
         continue;
       }
       for (let index = 0; index < value.length; index++) {
-        query.wheres.push({
-          name: key,
-          value: value[index],
-          displayType: (() => {
-            if (["date", "datetime"].indexOf(displayType) != -1) {
-              return index ? "lessorequal" : "thanorequal";
-            }
-            return displayType;
-          })()
-        });
+        if (!this.emptyValue(value[index])) {
+          query.wheres.push({
+            name: key,
+            value: (value[index] + '').trim(),
+            displayType: (() => {
+              if (["date", "datetime", "range"].indexOf(displayType) != -1) {
+                return index ? "lessorequal" : "thanorequal";
+              }
+              return displayType;
+            })()
+          });
+        }
       }
     }
     return query;
@@ -280,9 +298,10 @@ let methods = {
     let status = this.searchBefore(param);
     callBack(status);
   },
-  loadTableAfter(data, callBack) {
+  loadTableAfter(data, callBack, result) {
     //查询后
-    let status = this.searchAfter(data);
+    //2020.10.30增加查询后返回所有的查询信息
+    let status = this.searchAfter(data, result);
     callBack(status);
   },
   loadDetailTableBefore(param, callBack) {
@@ -315,6 +334,8 @@ let methods = {
   resetSearch() {
     //重置查询对象
     this.resetSearchForm();
+    //2020.10.17增加重置后方法
+    this.resetSearchFormAfter && this.resetSearchFormAfter();
   },
   resetEdit() {
     //重置编辑的数据
@@ -381,6 +402,7 @@ let methods = {
     }
   },
   resetForm(formName, sourceObj) {
+    //   return;
     //重置表单数据
     if (this.$refs[formName]) {
       this.$refs[formName].reset();
@@ -401,6 +423,7 @@ let methods = {
       this.getKeyValueType(this.searchFormOptions, false);
       this.keyValueType._dinit = true;
     }
+    var _cascaderParentTree;
     for (const key in form) {
       if (sourceObj.hasOwnProperty(key)) {
         let newVal = sourceObj[key];
@@ -412,7 +435,26 @@ let methods = {
           kv_type == "cascader"
         ) {
           // 2020.05.31增加iview组件Cascader
-          if (
+          // 2020.11.01增加iview组件Cascader表单重置时查询所有的父节点
+          if (kv_type == "cascader") {
+            var treeDic = this.dicKeys.find(dic => {
+              return dic.fileds && dic.fileds.indexOf(key) != -1;
+            })
+            if (treeDic && treeDic.orginData && treeDic.orginData.length) {
+              if (typeof treeDic.orginData[0].id == 'number') {
+                newVal = ~~newVal;
+              } else {
+                newVal = newVal + '';
+              }
+              _cascaderParentTree = this.base.getTreeAllParent(newVal, treeDic.orginData);
+              if (_cascaderParentTree) {
+                newVal = _cascaderParentTree.map(x => { return x.id })
+              }
+            } else {
+              newVal = [newVal];
+            }
+          }
+          else if (
             newVal != "" &&
             newVal != undefined &&
             typeof newVal == "string"
@@ -434,7 +476,26 @@ let methods = {
             newVal += "";
           }
         }
-        form[key] = newVal;
+        if (newVal instanceof Array) {
+          if (form[key]) {
+            form[key] = [];
+          }
+          form[key].splice(0)
+          //  this.$set(form, key, newVal);
+          form[key].push(...newVal);
+          if (kv_type == "cascader") {
+            this.$nextTick(() => {
+              //封装后iview原生监听不到model变化，后面再调试看看2020.11.01
+              _cascaderParentTree = _cascaderParentTree || [];
+              _cascaderParentTree.forEach(c => {
+                c.label = c.value;
+              })
+              this.$refs.form.$refs[key][0].selected = _cascaderParentTree;
+            });
+          }
+        } else {
+          form[key] = newVal;
+        }
       } else {
         form[key] = form[key] instanceof Array ? [] : "";
       }
@@ -463,7 +524,7 @@ let methods = {
       }
     });
   },
-  saveExecute() {
+  async saveExecute() {
     let _editFormFields = {};
     //上传文件以逗号隔开
     for (const key in this._editFormFields) {
@@ -478,17 +539,27 @@ let methods = {
         });
         _editFormFields[key] = allPath.join(",");
       } else {
-        _editFormFields[key] = this._editFormFields[key];
+        //2021.05.30修复下拉框清除数据后后台不能保存的问题
+        if (this._editFormFields[key] === undefined && this.dicKeys.some(x => { return x.fileds && x.fileds.indexOf(key) != -1 })) {
+          _editFormFields[key] = null;
+        }else{
+          _editFormFields[key] = this._editFormFields[key];
+        }
+       
       }
     }
-
-    // else {
-    //     _editFormFields = this._editFormFields;
-    // }
     //将数组转换成string
+    //2020.11.01增加级联处理
     for (const key in _editFormFields) {
       if (_editFormFields[key] instanceof Array) {
-        _editFormFields[key] = _editFormFields[key].join(",");
+
+        var iscascader = this.dicKeys.some(x => { return x.type == "cascader" && x.fileds && x.fileds.indexOf(key) != -1 });
+        if (iscascader && _editFormFields[key].length) {
+          _editFormFields[key] = _editFormFields[key][_editFormFields[key].length - 1];
+        } else {
+          _editFormFields[key] = _editFormFields[key].join(",");
+        }
+
       }
     }
 
@@ -506,16 +577,29 @@ let methods = {
       formData.delKeys = this.detailOptions.delKeys;
     }
     //保存前拦截
-    if (this.currentAction == this.const.ADD) {
-      if (!this.addBefore(formData)) return;
+    let _currentIsAdd = this.currentAction == this.const.ADD;
+    if (_currentIsAdd) {
+      //2020.12.06增加新建前异步处理方法
+      if (!this.addBefore(formData) || await !this.addBeforeAsync(formData)) return;
     } else {
-      if (!this.updateBefore(formData)) return;
+      //2020.12.06增加修改前异步处理方法
+      if (!this.updateBefore(formData) || await !this.updateBeforeAsync(formData)) return;
     }
     let url = this.getUrl(this.currentAction);
     this.http.post(url, formData, true).then(x => {
       //保存后
-      if (this.currentAction == this.const.ADD) {
+      if (_currentIsAdd) {
         if (!this.addAfter(x)) return;
+        //连续添加 
+        if (this.continueAdd && x.status) {
+          this.$success(x.message);
+          //新建
+          this.currentAction = this.const.ADD;
+          this.currentRow = {};
+          this.resetAdd();
+          this.refresh();
+          return;
+        }
       } else {
         if (!this.updateAfter(x)) return;
       }
@@ -524,7 +608,9 @@ let methods = {
       //如果保存成功后需要关闭编辑框，直接返回不处理后面
       if (this.boxOptions.saveClose) {
         this.boxModel = false;
-        this.refresh();
+        //2020.12.27如果是编辑保存后不重置分页页数，刷新页面时还是显示当前页的数据
+        this.$refs.table.load(null, _currentIsAdd);
+        //this.refresh();
         return;
       }
       let resultRow;
@@ -548,7 +634,8 @@ let methods = {
           this.$refs.detail.rowData.push(...resultRow.list);
         }
       }
-      this.refresh();
+      this.$refs.table.load(null, _currentIsAdd);
+      // this.refresh();
     });
   },
   del() {
@@ -585,14 +672,19 @@ let methods = {
       } //, onCancel: () => {}
     });
   },
-  initBox() {
+  async modelOpenBeforeAsync(row) {
+    return true;
+  },
+  async initBox() {
     //初始化新建、编辑的弹出框
+    if (!await this.modelOpenBeforeAsync(this.currentRow)) return false;
     this.modelOpenBefore(this.currentRow);
     if (!this.boxInit) {
       this.boxInit = true;
       this.boxModel = true;
       // this.detailUrl = this.url;
     }
+    return true;
   },
   setEditForm(row) {
     // if (this.remoteColumns.length == 0 || !rows || rows.length == 0) return;
@@ -614,23 +706,27 @@ let methods = {
     this.currentAction = this.const.EDIT;
     this.boxModel = true;
   },
-  linkData(row, column) {
+  async linkData(row, column) {
     //点击table单元格快捷链接显示编辑数据
     this.currentAction = this.const.EDIT;
     this.currentRow = row;
-    this.initBox();
+    if (!await this.initBox()) return;
     this.resetDetailTable(row);
     this.setEditForm(row);
+    this.setContinueAdd(false);
     //设置远程查询表单的默认key/value
     this.getRemoteFormDefaultKeyValue();
     //点击编辑按钮弹出框后，可以在此处写逻辑，如，从后台获取数据
     this.modelOpenProcess(row);
   },
-  add() {
-    //新建
-    this.currentAction = this.const.ADD;
-    this.currentRow = {};
-    this.initBox();
+  setContinueAdd(isAdd) {
+    if (!this.continueAdd) return;
+    var _button = this.boxButtons.find(x => { return x.value == "save" });
+    if (_button) {
+      _button.name = isAdd ? this.continueAddName : '保 存';
+    }
+  },
+  resetAdd() {
     if (this.hasDetail) {
       this.$refs.detail &&
         //  this.$refs.detail.rowData &&
@@ -646,14 +742,24 @@ let methods = {
       });
     });
     this.resetEditForm(obj);
+  },
+  async add() {
+    //新建
+    this.currentAction = this.const.ADD;
+    this.currentRow = {};
+    if (!await this.initBox()) return;
+
+    this.resetAdd();
+    this.setContinueAdd(true);
     //  this.resetEditForm();
     this.boxModel = true;
     //点击新建按钮弹出框后，可以在此处写逻辑，如，从后台获取数据
     this.modelOpenProcess();
     // this.modelOpenAfter();
   },
-  edit() {
+  async edit() {
     //编辑
+    this.currentAction = this.const.EDIT;
     let rows = this.$refs.table.getSelected();
     if (rows.length == 0) {
       return this.$error("请选择要编辑的行!");
@@ -661,7 +767,8 @@ let methods = {
     //记录当前编辑的行
     this.currentRow = rows[0];
     //初始化弹出框
-    this.initBox();
+    if (!await this.initBox()) return;
+    this.setContinueAdd(false);
     //重置表单
     this.resetDetailTable();
 
@@ -713,7 +820,7 @@ let methods = {
   import() {
     //导入(上传excel),弹出导入组件UploadExcel.vue
     this.upload.excel = true;
-    this.$refs.upload_excel&& this.$refs.upload_excel.reset();
+    this.$refs.upload_excel && this.$refs.upload_excel.reset();
   },
   download(url, fileName) {
     //下载导出的文件
@@ -726,7 +833,7 @@ let methods = {
     );
     let elink = this.$refs.export;
     xmlResquest.responseType = "blob";
-    xmlResquest.onload = function(oEvent) {
+    xmlResquest.onload = function (oEvent) {
       if (xmlResquest.status != 200) {
         this.$error("下载文件出错了..");
         return;
@@ -891,11 +998,30 @@ let methods = {
           keys.push(d.dataKey);
           //2020.05.03修复查询表单与编辑表单type类型变成强一致性的问题
           //this.dicKeys.push({ dicNo: d.dataKey, data: [], type: d.type });
-          let _dic = { dicNo: d.dataKey, data: [] };
+          //  2020.11.01增加iview组件Cascader数据源存储
+          let _dic = { dicNo: d.dataKey, data: [], fileds: [d.field], orginData: [] };
+          if (d.type == "cascader") {
+            _dic.type = "cascader";
+          }
           if (isEdit) {
-            _dic["e_type"] = d.type;
+            _dic['e_type'] = d.type;
           }
           this.dicKeys.push(_dic);
+        } else if (d.type == "cascader") {
+          //强制开启联级可以选择某个节点
+          if (!d.hasOwnProperty("changeOnSelect")) {
+            d.changeOnSelect = true;
+            // d.formatter = label => {
+            //   return label.join(' / ')
+            // };
+          }
+
+          this.dicKeys.forEach(x => {
+            if (x.dicNo == d.dataKey) {
+              x.type = "cascader";
+              x.fileds.push(d.field);
+            }
+          })
         }
 
         //2020.01.30移除内部表单formOptions数据源配置格式data.data，所有参数改为与组件api格式相同
@@ -926,11 +1052,16 @@ let methods = {
         return x.dicNo == key;
       });
       if (!dic || dic.length == 0) {
-        dicKeys.push({ dicNo: key, config: "", data: [] });
+        dicKeys.push({ dicNo: key, data: [] });
         dic = [dicKeys[dicKeys.length - 1]];
         keys.push(key);
       }
-      item.bind = dic[0];
+      //2020.11.01增加级联处理
+      if (dic[0].type == "cascader") {
+        item.bind = { data: dic[0].orginData, tyep: "select" }
+      } else {
+        item.bind = dic[0];
+      }
       //2020.05.03优化table数据源checkbox与select类型从编辑列中选取
       item.bind.type = item.bind.e_type || "string";
     });
@@ -941,12 +1072,16 @@ let methods = {
     dic.forEach(d => {
       this.dicKeys.forEach(x => {
         if (x.dicNo != d.dicNo) return true;
-        // try {
-        //     x.config = eval("(" + d.config + ")");
-        // } catch (error) {
-        //     x.config = { valueField: '', textField: '' }
-        // }
-        if (d.data.length > 0 && !d.data[0].hasOwnProperty("key")) {
+        //2020.10.26增加级联数据源绑定处理
+        if (x.type == "cascader") {
+          // x.data=d.data;
+          //生成tree结构
+          x.data.push(... this.base.convertTree(JSON.parse(JSON.stringify(d.data)), (node, data, isRoot) => {
+            node.label = node.value;
+            node.value = node.key;
+          }));
+          x.orginData.push(...d.data);
+        } else if (d.data.length > 0 && !d.data[0].hasOwnProperty("key")) {
           let source = d.data,
             newSource = new Array(source.length);
           for (let index = 0; index < source.length; index++) {
@@ -1006,6 +1141,10 @@ let methods = {
     });
     //初始化datatable表数据源,默认为一个空数组,dicKeys为界面所有的数据字典编号
     this.initColumns(this.columns, this.dicKeys, keys);
+    //2021.05.23默认开启查询页面所有字段排序,如果不需要排序，在onInited遍历columns设置sort=false
+    this.columns.forEach(x => {
+      x.sort = x.render ? false : true;
+    })
     if (this.detailOptions && this.detailOptions.columns) {
       this.initColumns(this.detailOptions.columns, this.dicKeys, keys);
     }
@@ -1049,24 +1188,30 @@ let methods = {
     //弹出框高度至少250px
     clientHeight = clientHeight < 250 ? 250 : clientHeight;
     let clientWidth = document.documentElement.clientWidth;
-
-    if (this.boxOptions.height) {
-      //如果高度与宽度超过了获取到的可见高宽度，则设为默认的90%高宽
-      if (this.boxOptions.height > clientHeight * 0.8) {
-        this.boxOptions.height = clientHeight * 0.8;
-      }
+    if (this.editFormOptions.some(x => { return x.some(item => { return item.type == "editor" }) })) {
+      this.editor.uploadImgUrl = this.getUrl("upload");
+      this.boxOptions.height = clientHeight * 0.8;
+      this.boxOptions.width = clientWidth * 0.8;
     }
-    if (this.boxOptions.width) {
-      //如果高度与宽度超过了获取到的可见高宽度，则设为默认的90%高宽
-      if (this.boxOptions.width > clientWidth * 0.8) {
-        this.boxOptions.width = clientWidth * 0.8;
+    else {
+      if (this.boxOptions.height) {
+        //如果高度与宽度超过了获取到的可见高宽度，则设为默认的90%高宽
+        if (this.boxOptions.height > clientHeight * 0.8) {
+          this.boxOptions.height = clientHeight * 0.8;
+        }
+      }
+      if (this.boxOptions.width) {
+        //如果高度与宽度超过了获取到的可见高宽度，则设为默认的90%高宽
+        if (this.boxOptions.width > clientWidth * 0.8) {
+          this.boxOptions.width = clientWidth * 0.8;
+        }
       }
     }
     //计算整个table的宽度，根据宽度决定是否启用第一行显示的列为固定列
     let maxTableWidth = clientWidth - 270;
     this.setFiexdColumn(this.columns, maxTableWidth);
 
-    this.height = this.tableHeight || clientHeight - 210;
+    this.height = this.tableHeight || clientHeight - 206;
     this.url = this.getUrl(this.const.PAGE);
     //计算弹出框的高与宽度
     //如果有明细表，高度与宽带设置为0.9/0.82
@@ -1114,7 +1259,19 @@ let methods = {
     this.rowChange(row);
   },
   rowChange(row) {
-    //选中行事件
+    //选中行checkbox行事件
+  },
+  rowOnClick({ row, column, event }) {
+    this.rowClick({ row, column, event });
+  },
+  rowClick({ row, column, event }) {
+    // 点击行事件(2020.11.07)
+  },
+  rowOnDbClick({ row, column, event }) {
+    this.rowDbClick({ row, column, event });
+  },
+  rowDbClick({ row, column, event }) {
+    // 双击击行事件(2021.05.23)
   },
   $error(message) {
     this.$Message.error({
@@ -1132,14 +1289,31 @@ let methods = {
     this.fiexdSearchForm = true;
     let refreshBtn = this.buttons.find(x => x.name == "刷 新");
     if (visiable) {
-      this.searchBoxShow=true;
+      this.searchBoxShow = true;
     }
     if (refreshBtn) {
       refreshBtn.name = "重 置";
-      refreshBtn.onClick = function() {
+      refreshBtn.onClick = function () {
         this.resetSearch();
       };
     }
+  },
+  endEditBefore(row, column, index) {//2021.03.19是否开启查询界面表格双击编辑结束方法,返回false不会结束编辑
+    return true;
+  },
+  filterPermission(tableName, permission) {  //2021.03.19判断是否有某个表的按钮权限
+    //:["Search","Add","Delete","Update","Import","Export","Upload","Audit"]
+    const _result = (this.$store.state.system.permission || []).find(x => { return x.url == '/' + tableName });
+    return _result && _result.permission.some(x => x == permission);
+  },
+  destroyed() { //2021.04.11增加vue页面销毁方法,路由必须设置keepLive:false，设置方法见：前端开发文档-》[禁用页面缓存keepAlive]
+
+  },
+  loadTreeTableChildren(tree, treeNode, resolve) {
+    this.loadTreeChildren.call(this, tree, treeNode, resolve);
+  },
+  loadTreeChildren(tree, treeNode, resolve) {//树形结构加载子节点(2021.05.02),在onInit中设置了rowKey主键字段后才会生效
+    return resolve([]);
   }
 };
 //合并扩展方法

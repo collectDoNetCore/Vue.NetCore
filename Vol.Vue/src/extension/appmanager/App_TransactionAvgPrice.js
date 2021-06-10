@@ -15,10 +15,22 @@ let extension = {
   buttons: [], //扩展的按钮
   methods: {
     //事件扩展
-    onInit() {
-      //开启固定显示查询功能，true=页面加载时查询表单也显示出来，false=点击查询时才会显示表单
-      this.setFiexdSearchForm(true);
-    }
+    onInit () {
+      //设置页面上显示的按钮个数(不是必须的)
+      this.maxBtnLength = 6;
+      //this.boxButtons弹出框的按钮,this.detailOptions.buttons，同样适用上面上方法
+
+      //设置显示所有查询条件
+     // this.setFiexdSearchForm(true);
+    },
+    onInited(){
+      //设置表高度
+     // this.height=this.height-125;
+    },
+    rowDbClick ({ row, column, event }) { //查询界面table点击行时选中当前行
+       
+      this.$refs.table.$refs.table.toggleRowSelection(row);
+    },
   }
 };
 export default extension;

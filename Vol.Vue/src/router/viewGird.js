@@ -16,6 +16,10 @@ let viewgird = [
         path: '/Sys_Role',
         name: 'Sys_Role',
         component: () => import('@/views/system/Sys_Role.vue')
+    }  ,{
+        path: '/Sys_Role1',
+        name: 'Sys_Role1',
+        component: () => import('@/views/system/Sys_Role1.vue')
     }
     ,{
         path: '/Sys_DictionaryList',
@@ -26,7 +30,15 @@ let viewgird = [
         path: '/SellOrder',
         name: 'SellOrder',
         component: () => import('@/views/order/SellOrder.vue')
+    }  ,{
+        path: '/SellOrder2',
+        name: 'SellOrder2',
+        component: () => import('@/views/order/SellOrder2.vue')
     }    ,{
+        path: '/SellOrder3',
+        name: 'SellOrder3',
+        component: () => import('@/views/order/SellOrder3.vue')
+    }     ,{
       path: '/vSellOrderImg',
       name: 'vSellOrderImg',
       component: () => import('@/views/order/vSellOrderImg.vue')
@@ -42,11 +54,19 @@ let viewgird = [
         path: '/App_Expert',
         name: 'App_Expert',
         component: () => import('@/views/appmanager/App_Expert.vue')
-    }    ,{
+    }   ,{
+        path: '/App_Expert2',
+        name: 'App_Expert2',
+        component: () => import('@/views/appmanager/App_Expert2.vue')
+    }     ,{
         path: '/App_Transaction',
         name: 'App_Transaction',
         component: () => import('@/views/appmanager/App_Transaction.vue')
     }    ,{
+        path: '/App_Transaction2',
+        name: 'App_Transaction2',
+        component: () => import('@/views/appmanager/App_Transaction2.vue')
+    }     ,{
         path: '/App_ReportPrice',
         name: 'App_ReportPrice',
         component: () => import('@/views/appmanager/App_ReportPrice.vue')
@@ -54,5 +74,10 @@ let viewgird = [
         path: '/App_News',
         name: 'App_News',
         component: () => import('@/views/appmanager/App_News.vue')
+    }    ,{
+        path: '/App_NewsEditor',
+        name: 'App_NewsEditor',
+        component: () => import('@/views/appmanager/App_NewsEditor.vue')
     }]
+
 export default viewgird

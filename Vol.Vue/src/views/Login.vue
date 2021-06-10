@@ -1,7 +1,7 @@
 <template>
   <div class="bg">
     <div class="content">
-      <div class="desc">
+      <!-- <div class="desc">
         <div class="title">vol.vue</div>
         <p>前后端分离</p>
         <p>全自动代码生成</p>
@@ -9,49 +9,103 @@
         <p>后台.NetCore 3.1、EntityFrameWorkCore 3.1、Dapper</p>
         <p>前端Vue、Promise、Vuex、Axios、Iview、Element-UI</p>
         <p>帐号admin666,密码123456(本地帐号admin,密码123456)</p>
+      </div> -->
+      <div class="l-left">
+        <div class="desc">
+          <div class="title">vol.vue</div>
+               <p>后台</p>
+          <p>.NetCore、EntityFrameWorkCore、Dapper、Redis</p>
+          <p>Vue、Promise、Vuex、IView、Element-UI</p>
+          <p>演示帐号：admin666  密码:123456</p>
+          <p>本地帐号：admin &nbsp; &nbsp; &nbsp; 密码:123456</p>
+          <div style="margin-top: 30px">
+            <a
+              href="https://github.com/cq-panda/Vue.NetCore"
+              target="_blank"
+              style="color: #ffff; border: 1px solid #ffff;width: 80px;margin-right: 5px;"
+              class="index-btn ivu-btn ivu-btn-primary ivu-btn-circle ivu-btn-ghost"
+            >
+              <span>GitHub</span></a
+            >
+            <a
+              href="https://gitee.com/x_discoverer/Vue.NetCore"
+              target="_blank"
+              style="color: #ffff; border: 1px solid #ffff; width: 80px;margin-right: 5px;"
+              class="index-btn ivu-btn ivu-btn-primary ivu-btn-circle ivu-btn-ghost"
+            >
+              <span>Gitee</span></a
+            >
+                <a
+              href="http://www.volcore.xyz/app/guide"
+              target="_blank"
+              style="color: #ffff; border: 1px solid #ffff; width: 80px;margin-right: 5px;"
+              class="index-btn ivu-btn ivu-btn-primary ivu-btn-circle ivu-btn-ghost"
+            >
+              <span>H5/App</span></a
+            >
+            <a
+              href="http://www.volcore.xyz/document/guide"
+              target="_blank"
+              style="color: #ffff; border: 1px solid #ffff"
+              class="index-btn ivu-btn ivu-btn-primary ivu-btn-circle ivu-btn-ghost"
+            >
+              <span>Document</span></a
+            >
+          </div>
+        </div>
       </div>
       <div class="login">
         <div class="login-contianer">
           <div class="login-form">
-            <Menu mode="horizontal" style="margin-bottom: 30px;" active-name="1">
-              <MenuItem name="1">
-                <Icon type="md-contacts" />帐号登陆
-              </MenuItem>
-              <MenuItem name="2">
-                <Icon type="ios-mail" />短信登陆
-              </MenuItem>
-            </Menu>
+      <h2 style="padding: 20px 0px;font-weight: 500;">帐号登陆</h2>
             <div class="form-user" @keypress="loginPress">
               <div class="item">
                 <div class="f-text">
                   <label>
-                    <Icon type="ios-people" :size="20" />用户名：
+                    <!-- <Icon type="ios-people"
+                          :size="20" /> -->
+                    用户名：
                   </label>
                 </div>
                 <div class="f-input">
-                  <input type="text" v-focus v-model="userInfo.userName" placeholder="输入用户" />
+                  <input
+                    type="text"
+                    v-focus
+                    v-model="userInfo.userName"
+                    placeholder="输入用户"
+                  />
                 </div>
-                <div class="f-remove" @click="userInfo.userName=''">
+                <div class="f-remove" @click="userInfo.userName = ''">
+                  <!-- <Icon type="ios-close-circle" /> -->
+                </div>
+              </div>
+              <div class="item">
+                <div class="f-text">
+                  <label>
+                    <!-- <Icon type="ios-lock"
+                          :size="20" /> -->
+                    密&nbsp;&nbsp;&nbsp;码：
+                  </label>
+                </div>
+                <div class="f-input">
+                  <input
+                    type="password"
+                    v-focus
+                    v-model="userInfo.passWord"
+                    placeholder="输入密码"
+                  />
+                </div>
+                <div v-focus class="f-remove" @click="userInfo.passWord = ''">
                   <Icon type="ios-close-circle" />
                 </div>
               </div>
               <div class="item">
                 <div class="f-text">
                   <label>
-                    <Icon type="ios-lock" :size="20" />密&nbsp;&nbsp;&nbsp;码：
-                  </label>
-                </div>
-                <div class="f-input">
-                  <input type="password" v-focus v-model="userInfo.passWord" placeholder="输入密码" />
-                </div>
-                <div v-focus class="f-remove" @click="userInfo.passWord=''">
-                  <Icon type="ios-close-circle" />
-                </div>
-              </div>
-              <div class="item">
-                <div class="f-text">
-                  <label>
-                    <Icon type="md-images" v-focus :size="20" />验证码：
+                    <!-- <Icon type="md-images"
+                          v-focus
+                          :size="20" /> -->
+                    验证码：
                   </label>
                 </div>
                 <div class="f-input">
@@ -62,20 +116,33 @@
                     placeholder="输入验证码"
                   />
                 </div>
-                <div class="code" @click="()=>{getVierificationCode()}">
-                  <img v-show="codeImgSrc!=''" :src="codeImgSrc" />
+                <div
+                  class="code"
+                  @click="
+                    () => {
+                      getVierificationCode();
+                    }
+                  "
+                >
+                  <img v-show="codeImgSrc != ''" :src="codeImgSrc" />
                 </div>
               </div>
             </div>
             <div style="loging-btn">
-              <Button size="large" :loading="loading" type="info" @click="login" long>
+              <Button
+                size="large"
+                :loading="loading"
+                type="info"
+                @click="login"
+                long
+              >
                 <span v-if="!loading">登陆</span>
                 <span v-else>正在登陆...</span>
               </Button>
             </div>
             <div class="action">
-              <a @click="()=>{}">注册</a>
-              <a @click="()=>{}">忘记密码</a>
+              <a @click="() => {}">注册</a>
+              <a @click="() => {}">忘记密码</a>
             </div>
           </div>
         </div>
@@ -83,12 +150,18 @@
     </div>
     <div class="l-bg"></div>
     <div class="r-bg"></div>
+    <div class="c-bg">
+      <div class="c-bg-item"></div>
+      <div class="c-bg-item"></div>
+      <div class="c-bg-item"></div>
+      <div class="c-bg-item"></div>
+    </div>
     <div class="login-footer">
       <a @click="toGitHub">
-        <Icon type="logo-github" />GitHub
+        <!-- <Icon type="logo-github" /> -->
+        GitHub
       </a>
       <a>QQ群：45221949</a>
-      <a href="http://www.beian.miit.gov.cn/" target="_blank">京ICP备19056538号-1</a>
     </div>
   </div>
 </template>
@@ -101,23 +174,23 @@ export default {
       userInfo: {
         userName: "",
         passWord: "",
-        verificationCode: ""
-      }
+        verificationCode: "",
+      },
     };
   },
   directives: {
     focus: {
-      inserted: function(el) {
+      inserted: function (el) {
         el.focus();
-      }
-    }
+      },
+    },
   },
   created() {
     this.getVierificationCode();
   },
   methods: {
     getVierificationCode() {
-      this.http.get("/api/User/getVierificationCode").then(x => {
+      this.http.get("/api/User/getVierificationCode").then((x) => {
         this.codeImgSrc = "data:image/png;base64," + x.img;
         this.userInfo.UUID = x.uuid;
       });
@@ -144,7 +217,7 @@ export default {
       this.loading = true;
       this.http
         .post("/api/user/login", this.userInfo, "正在登陆....")
-        .then(result => {
+        .then((result) => {
           if (!result.status) {
             this.loading = false;
             this.getVierificationCode();
@@ -154,15 +227,15 @@ export default {
           this.$store.commit("setUserInfo", result.data);
           this.$router.push({ path: "/" });
         });
-    }
-  }
+    },
+  },
 };
 </script>
 
 <style lang="less" scoped>
 .bg {
   display: flex;
-  overflow-x: hidden;
+  overflow: hidden;
   position: relative;
   height: 100%;
   width: 100%;
@@ -177,7 +250,7 @@ export default {
   display: flex;
   z-index: 99;
   position: relative;
-  width: 1000px;
+  width: 860px;
   left: 0;
   right: 0;
 
@@ -185,13 +258,22 @@ export default {
   transform: translateY(-50%);
   // background: #dedede40;
   top: 50%;
-  height: 450px;
+  height: 400px;
   border-radius: 10px;
+  .l-left {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    width: 400px;
+    background-image: linear-gradient( 
+135deg
+ , #0d82ff 10%, #0cd7bd);
+    border: 1px solid #5c87ff;
+  }
 }
 
 .desc {
-  width: 500px;
-  padding: 40px 50px;
+  width: 450px;
+padding: 10px 30px;
   box-sizing: border-box;
   height: 100%;
 }
@@ -255,7 +337,7 @@ export default {
     margin-bottom: 30px;
     display: flex;
     .f-text {
-      color: #868484;
+      color: #484848;
       font-weight: 400;
       width: 110px;
       font-size: 16px;
@@ -268,15 +350,6 @@ export default {
     .f-input {
       border: 0px;
       flex: 1;
-      input {
-        padding-left: 15px;
-        font-size: 16px;
-        font-weight: 400;
-        color: #807f7f;
-        width: 100%;
-        outline: none;
-        border: none;
-      }
     }
     .code {
       position: relative;
@@ -288,16 +361,6 @@ export default {
       height: 35px;
       margin-left: 10px;
     }
-    input:focus {
-      outline: none;
-      background-color: transparent;
-    }
-    input::selection {
-      background: transparent;
-    }
-    input::-moz-selection {
-      background: transparent;
-    }
   }
 }
 input:-webkit-autofill {
@@ -306,11 +369,13 @@ input:-webkit-autofill {
 .login-contianer {
   .login-form {
     // margin-top: 25px;
-    border-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
     padding: 10px 30px 40px 30px;
     width: 400px;
     min-height: 340px;
     background: white;
+        height: 400px;
     box-shadow: 0px 4px 21px #d6d6d6;
   }
 }
@@ -360,9 +425,29 @@ input:-webkit-autofill {
     color: #f9ebd0;
   }
 }
-@media screen and (max-device-width: 600px) {
+@media screen and (max-width: 600px) {
   .desc {
     display: none;
+  }
+  .bg {
+    background-image: none;
+  }
+  .login-form {
+    box-shadow: none !important;
+  }
+  .login-form {
+    width: 100% !important;
+  }
+  .login-footer,
+  .r-bg,
+  .l-bg {
+    display: none;
+  }
+  .l-left{
+        display: none;
+  }
+  .c-bg-item{
+    background: none !important;
   }
 }
 </style>
@@ -372,12 +457,37 @@ input:-webkit-autofill {
 }
 </style>
 <style>
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus {
+input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0px 1000px white inset !important;
-  box-shadow: 0 0 0 60px #eee inset;
-  -webkit-text-fill-color: #878787;
+}
+input {
+  background: white;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: #323233;
+  line-height: inherit;
+  text-align: left;
+  border: 0;
+  outline: none;
+  font-size: 16px;
+  line-height: 20px;
+}
+</style>
+<style lang="less" scoped>
+.c-bg {
+  position: absolute;
+  width: 100%;
+  height: 200px;
+
+  .c-bg-item {
+    width: 25%;
+    background: #00a7f5;
+    height: 200px;
+  }
 }
 </style>
 

@@ -9,7 +9,12 @@ namespace VOL.Core.Dapper
 {
     public interface ISqlDapper
     {
-
+        /// <summary>
+        ///  超时时间(秒)2021.05.05
+        /// </summary>
+        /// <param name="timeout"></param>
+        /// <returns></returns>
+        ISqlDapper SetTimout(int timeout);
         void BeginTransaction(Func<ISqlDapper, bool> action, Action<Exception> error);
 
         /// <summary>
@@ -25,6 +30,9 @@ namespace VOL.Core.Dapper
         /// <returns></returns>
         List<T> QueryList<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false) where T : class;
         T QueryFirst<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false) where T : class;
+
+        List<dynamic> QueryDynamicList(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false);
+        dynamic QueryDynamicFirst(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false);
         object ExecuteScalar(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false);
 
         int ExcuteNonQuery(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false);
@@ -74,7 +82,7 @@ namespace VOL.Core.Dapper
         int UpdateRange<T>(IEnumerable<T> entities, Expression<Func<T, object>> updateFileds = null, bool beginTransaction = false);
 
         int DelWithKey<T>(params object[] keys);
-        int DelWithKey<T>(bool beginTransaction = false,params object[] keys);
+        int DelWithKey<T>(bool beginTransaction = false, params object[] keys);
         /// <summary>
         ///  sqlserver批量写入
         /// 使用时DataTable table表字段顺序要和数据库字段顺序一致

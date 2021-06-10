@@ -3,21 +3,24 @@
     <div class="doc-left">
       <el-scrollbar style="height:100%;">
         <ul>
-          <li class="n-item" v-for="(item,index) in items" :key="index">
-            <a
-              :class="{active:active==index}"
-              @click="scrollIntoView(index)"
-            >{{index+1}}. {{item.title}}</a>
+          <li class="n-item"
+              v-for="(item,index) in items"
+              :key="index">
+            <a :class="{active:active==index}"
+               @click="scrollIntoView(index)">{{index+1}}. {{item.title}}</a>
           </li>
         </ul>
       </el-scrollbar>
     </div>
     <div class="doc-right">
       <div class="doc-nav">
-        <a @click="()=>{this.b_moel=true;}">多租户</a>
+        <a @click="()=>{this.b_moel=true;}">多租户(数据隔离)</a>
+        <a @click="openRole()">多角色</a>
         <a @click="opendb()">分库/多数据库</a>
-        <a @click="()=>{this.$Message.error('暂不开放')}">国际化</a>
+		  <a @click="open_oracle()">Oracle版本</a>
+        <a @click="()=>{this.$Message.error('需要的进群或单独联系我')}">国际化</a>
         <a @click="scrollIntoView('extend')">后台基础代码扩展实现</a>
+
       </div>
       <div class="title">
         <h2>后台开发</h2>
@@ -27,13 +30,12 @@
           <p class="desc">后台开发都是代码生成器生成后的类进行扩展及常用功能使用</p>
         </div>
         <div>
-          <p
-            class="desc"
-            style="font-size: 20px;"
-          >后台完整扩展实现：VOL.Order->Services->Sell->Partial->SellOrderService.cs文件</p>
+          <p class="desc"
+             style="font-size: 20px;">后台完整扩展实现：VOL.Order->Services->Sell->Partial->SellOrderService.cs文件</p>
         </div>
       </div>
-      <Alert type="success" show-icon>
+      <Alert type="success"
+             show-icon>
         提示
         <template slot="desc">
           <div style="line-height: 2;">
@@ -45,40 +47,47 @@
         </template>
       </Alert>
 
-      <div :id="'i-'+index" class="doc-wrapper" v-for="(item,index) in items" :key="index">
+      <div :id="'i-'+index"
+           class="doc-wrapper"
+           v-for="(item,index) in items"
+           :key="index">
         <div class="title">
           <h2>{{item.title}}</h2>
         </div>
         <div style=" box-shadow: 0 8px 12px #ebedf0;">
           <div class="d-content">
             <div class="code">
-              <p v-for="(line,key) in item.content" :key="key" class="desc" v-html="line"></p>
+              <p v-for="(line,key) in item.content"
+                 :key="key"
+                 class="desc"
+                 v-html="line"></p>
             </div>
           </div>
-          <Alert type="success" show-icon>{{item.tips}}</Alert>
+          <Alert type="success"
+                 show-icon>{{item.tips}}</Alert>
         </div>
       </div>
     </div>
 
-    <Drawer :width="700" class="q-drawer" title="多租户" :closable="false" v-model="b_moel">
-      <Alert type="success" show-icon>
+    <Drawer :width="700"
+            class="q-drawer"
+            title="多租户"
+            :closable="false"
+            v-model="b_moel">
+      <Alert type="success"
+             show-icon>
         关于多租户（2020.08.15）
         <template slot="desc">
-          <p
-            style="    color: red;
-    font-size: 16px;"
-          >多租户2020.08.15更新，只需要更新后台文件：ServiceBase.cs、ServiceFunFilter.cs</p>
+          <p style="    color: red;
+    font-size: 16px;">多租户2020.08.15更新，只需要更新后台文件：ServiceBase.cs、ServiceFunFilter.cs、Tenancy文件夹(2021.02.28)</p>
         </template>
       </Alert>
-      <el-collapse v-model="activeName" accordion>
-        <div
-          style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;"
-        >
+      <el-collapse v-model="activeName"
+                   accordion>
+        <div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;">
           <div>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span
-              style="color:#6a9955;"
-            >//以SellOrderService为例，在类中重写Init方法，设置IsMultiTenancy=true开启多租户功能</span>
+            <span style="color:#6a9955;">//以SellOrderService为例，在类中重写Init方法，设置IsMultiTenancy=true开启多租户功能</span>
           </div>
           <div>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -101,9 +110,7 @@
           </div>
           <div>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-            <span
-              style="color:#6a9955;"
-            >//如果只需要对某个功能生效，如编辑，则在重写编辑方法中设置&nbsp;IsMultiTenancy&nbsp;=&nbsp;true;</span>
+            <span style="color:#6a9955;">//如果只需要对某个功能生效，如编辑，则在重写编辑方法中设置&nbsp;IsMultiTenancy&nbsp;=&nbsp;true;</span>
           </div>
           <div>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -112,11 +119,9 @@
           </div>
           <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div>
         </div>
-        <div
-          style="padding: 10px 0;
+        <div style="padding: 10px 0;
     font-size: 22px;
-    color: red;"
-        >多租户不能直接使用，请在ServiceBase.cs中统一修改CheckUpdateMultiTenancy、CheckDelMultiTenancy、GetSearchQueryable方法，具体修改请看方法的描述</div>
+    color: red;">多租户面向数据库数据隔离，开启租户功能后默认只隔离用户自己创建的数据，可以根据需要自行设置数据隔离逻辑（具体见TenancyManager.cs）</div>
       </el-collapse>
     </Drawer>
   </div>
@@ -124,10 +129,16 @@
 <script>
 export default {
   methods: {
-    opendb() {
+    opendb () {
       window.open("http://api.volcore.xyz/doc/index.html");
     },
-    scrollIntoView(index) {
+    openRole () {
+      window.open("https://gitee.com/x_discoverer/multi-role");
+    },
+	open_oracle(){
+		  window.open("https://gitee.com/x_discoverer/oracle");
+	},
+    scrollIntoView (index) {
       if (typeof index == "string") {
         index = this.items.findIndex((x) => {
           return x.name == index;
@@ -142,7 +153,7 @@ export default {
       this.active = index;
     },
   },
-  data() {
+  data () {
     return {
       activeName: "",
       b_moel: false,
@@ -206,6 +217,25 @@ export default {
           tips: ` repository.DapperContext或DBServerProvider.SqlDapper可直接使用dapper，内部已封装好常用功能`,
         },
         {
+          title: "接口禁用驼峰规则",
+          content: [
+            `框架接口数据默认都使用的小驼峰规则，如果需要原样返回数据（2020-11-21更新vol.core->controller下的文件夹才可以使用），请在控制器方法使用 return JsonNormal();`,
+          ],
+          tips: ` 还没想好`,
+          img: "",
+        },
+        {
+          title: "不显示的菜单权限分配",
+          content: [
+            `<div style="line-height: 2;"><p>菜单不显示，但又需要对菜单进行权限分配，请更新下面文件，文件里修改的地方标注了日期2020.12.27（2020.12.27后获取的项目不用更新）</p>
+            <p>2020.12.27更新后才能使用，更新文件VolElementMenu.vue 、 VolElementMenuChild.vue、  Sys_Menu.vue 、  Sys_MenuService.cs 、  UserContext.cs</p>
+            <p style="color:red">如果2020.12.20之后没有更新过项目，请同时更新 
+VolElementMenuChild.vue(新增) 、VolElementMenu.vue(新增) 、Index.vue 、common.js文件</p></div>`,
+          ],
+          tips: ` 还没想好`,
+          img: "",
+        },
+        {
           title: "获取表依赖注入service实例",
           content: [
             `表名xxxService.Instance；如:Sys_UserService.Instance(仅限在同一个类库中使用)`,
@@ -220,6 +250,272 @@ export default {
           ],
           tips: ` 还没想好`,
           img: "",
+        },
+        {
+          title: "Controller中构造方法获取实例",
+          content: [
+            `<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+	<div>
+		&nbsp; &nbsp;&nbsp;<span style="display:none;"></span><span style="color:#6a9955;">//通过partial类构造方法获取对象</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;[<span style="color:#dcdcaa;">Route</span>(<span style="color:#ce9178;">"api/User"</span>)]
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">public</span>&nbsp;<span style="color:#9cdcfe;">partial</span>&nbsp;<span style="color:#569cd6;">class</span>&nbsp;<span style="color:#4ec9b0;">Sys_UserController</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">ISys_UserService</span>&nbsp;<span style="color:#9cdcfe;">_userService</span>;<span style="color:#6a9955;">//访问业务代码</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">IHttpContextAccessor</span>&nbsp;<span style="color:#9cdcfe;">_httpContextAccessor</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">ISys_UserRepository</span>&nbsp;<span style="color:#9cdcfe;">_userRepository</span>;<span style="color:#6a9955;">//访问数据库</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">ICacheService</span>&nbsp;<span style="color:#9cdcfe;">_cacheService</span>;
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;summary&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;Controller中使用构造方法注入</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&nbsp;:&nbsp;base(userService)给父类传递当前service必须要有</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;/summary&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="userService"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="httpContextAccessor"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="userRepository"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="cacheService"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<span style="color:#9cdcfe;">ActivatorUtilitiesConstructor</span>]
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">public</span>&nbsp;<span style="color:#dcdcaa;">Sys_UserController</span>(
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ISys_UserService</span>&nbsp;<span style="color:#9cdcfe;">userService</span>,
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">IHttpContextAccessor</span>&nbsp;<span style="color:#9cdcfe;">httpContextAccessor</span>,
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ISys_UserRepository</span>&nbsp;<span style="color:#9cdcfe;">userRepository</span>,
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ICacheService</span>&nbsp;<span style="color:#9cdcfe;">cacheService</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;<span style="color:#4ec9b0;">base</span>(<span style="color:#4ec9b0;">userService</span>)
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_userService</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">userService</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_httpContextAccessor</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">httpContextAccessor</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_userRepository</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">userRepository</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_cacheService</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">cacheService</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+</div>
+<br />`,
+          ],
+          tips: ` 还没想好`,
+          img: "",
+        },
+        {
+          title: "Service中构造方法获取实例",
+          content: [`<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+	<div>
+		&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;summary&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;在partial中&nbsp;Sys_UserService使用构造方法获取对象</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;/summary&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">public</span>&nbsp;<span style="color:#9cdcfe;">partial</span>&nbsp;<span style="color:#569cd6;">class</span>&nbsp;<span style="color:#4ec9b0;">Sys_UserService</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">IHttpContextAccessor</span>&nbsp;<span style="color:#9cdcfe;">_httpContextAccessor</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">ISys_UserRepository</span>&nbsp;<span style="color:#9cdcfe;">_userRepository</span>;<span style="color:#6a9955;">//访问数据库</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">private</span>&nbsp;<span style="color:#569cd6;">readonly</span>&nbsp;<span style="color:#9cdcfe;">ICacheService</span>&nbsp;<span style="color:#9cdcfe;">_cacheService</span>;
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;summary&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;Controller中使用构造方法注入</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&nbsp;:&nbsp;base(userRepository)给父类传递当前Repository必须要有</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;/summary&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="userService"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="httpContextAccessor"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="userRepository"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">///&nbsp;&lt;param&nbsp;name="cacheService"&gt;&lt;/param&gt;</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[<span style="color:#9cdcfe;">ActivatorUtilitiesConstructor</span>]
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">public</span>&nbsp;<span style="color:#dcdcaa;">Sys_UserService</span>(
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ISys_UserRepository</span>&nbsp;<span style="color:#9cdcfe;">userRepository</span>,
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">IHttpContextAccessor</span>&nbsp;<span style="color:#9cdcfe;">httpContextAccessor</span>,
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ICacheService</span>&nbsp;<span style="color:#9cdcfe;">cacheService</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;<span style="color:#4ec9b0;">base</span>(<span style="color:#4ec9b0;">userRepository</span>)
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_httpContextAccessor</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">httpContextAccessor</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_userRepository</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">userRepository</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">_cacheService</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">cacheService</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//多租户会用到这init代码，其他情况可以不用</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//base.Init(userRepository);</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+</div>`
+          ],
+          tips: ` 还没想好`,
+          img: "",
+        },
+        {
+          title: "使用EF执行原生sql",
+          content: [`<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">public</span>&nbsp;<span style="color:#9cdcfe;">partial</span>&nbsp;<span style="color:#569cd6;">class</span>&nbsp;<span style="color:#4ec9b0;">Sys_UserService</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">public</span>&nbsp;<span style="color:#569cd6;">async</span>&nbsp;<span style="color:#9cdcfe;">Task</span>&lt;<span style="color:#9cdcfe;">object</span>&gt;&nbsp;<span style="color:#dcdcaa;">Test</span>()
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">string</span>&nbsp;<span style="color:#9cdcfe;">userName</span>&nbsp;=&nbsp;<span style="color:#ce9178;">"admin"</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//FromSqlInterpolated方法参数化查询，具体参照EF文档</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">FormattableString</span>&nbsp;<span style="color:#9cdcfe;">formattableString</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">$</span><span style="color:#ce9178;">"select&nbsp;*&nbsp;from&nbsp;Sys_User&nbsp;where&nbsp;UserName={userName}"</span>;
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#569cd6;">var</span>&nbsp;<span style="color:#9cdcfe;">user</span>&nbsp;=&nbsp;<span style="color:#c586c0;">await</span>&nbsp;<span style="color:#9cdcfe;">repository</span>.<span style="color:#dcdcaa;">FromSqlInterpolated</span>(<span style="color:#9cdcfe;">formattableString</span>)
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.<span style="color:#dcdcaa;">Where</span>(<span style="color:#9cdcfe;">x</span>&nbsp;<span style="color:#569cd6;">=&gt;</span>&nbsp;<span style="color:#b5cea8;">1</span>&nbsp;==&nbsp;<span style="color:#b5cea8;">1</span>)
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.<span style="color:#dcdcaa;">Select</span>(<span style="color:#9cdcfe;">s</span>&nbsp;<span style="color:#569cd6;">=&gt;</span>&nbsp;<span style="color:#569cd6;">new</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.<span style="color:#9cdcfe;">User_Id</span>,
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.<span style="color:#9cdcfe;">UserPwd</span>
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}).<span style="color:#dcdcaa;">FirstOrDefaultAsync</span>();
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#c586c0;">return</span>&nbsp;<span style="color:#9cdcfe;">user</span>;
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+</div>`],
+          tips: ''
         },
         {
           title: "使用EF事务",
@@ -321,28 +617,180 @@ export default {
           ],
           tips: "",
         },
-        {
-          title: "Memory/Redis对象",
+		 {
+          title: "Dapper连接其他数据库",
+          content: [  ` 
+		  <div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+           //在DBServerProvider.cs类构造方法中添加如下配置
+
+        <div>
+		<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">static</span>&nbsp;<span style="color:#dcdcaa;">DBServerProvider</span>()
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#dcdcaa;">SetConnection</span>(<span style="color:#9cdcfe;">DefaultConnName</span>,&nbsp;<span style="color:#9cdcfe;">AppSetting</span>.<span style="color:#9cdcfe;">DbConnectionString</span>);
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//添加其他数据库链接配置</span> 
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ConnectionPool</span>.<span style="color:#dcdcaa;">TryAdd</span>(<span style="color:#ce9178;">"自定key"</span>,&nbsp;<span style="color:#ce9178;">"数据库连接字符串"</span>);
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//使用方式</span> 
+	</div>
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//&nbsp;DBServerProvider.GetSqlDapper("自定key");</span> 
+	</div>
+<br />
+	<div>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}
+	</div>
+</div>`   ],
+          tips: "",
+        },
+		  {
+          title: "Dapper访问数据库/存储过程",
+          content: [
+            `<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+	&nbsp; &nbsp; &nbsp; &nbsp; public void Test()<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; string tranNo = "T20001000100001";<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; int orderType = 1;<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; string sql = "select * from SellOrder where TranNo=@tranNo and OrderType=@orderType";<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; //与原生dapper使用方式基本一致，更多使用方法参照dapper文档<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBServerProvider.SqlDapper.QueryList&lt;SellOrder&gt;(sql, new { tranNo, orderType });&nbsp; &nbsp; &nbsp;&nbsp;<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBServerProvider.SqlDapper.QueryFirst&lt;dynamic&gt;(sql, new { tranNo, orderType });<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBServerProvider.SqlDapper.QueryFirst&lt;object&gt;(sql, new { tranNo, orderType });<br />
+<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBServerProvider.SqlDapper.ExecuteScalar(sql, new { tranNo, orderType });<br />
+<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; //调用存储过程<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; DBServerProvider.SqlDapper.ExecuteScalar("存储过程名", new {参数 },System.Data.CommandType.StoredProcedure);<br />
+<br />
+&nbsp; &nbsp; &nbsp; &nbsp; }<br />
+</div>`,
+          ],
+          tips: `还没想好`,
+          img: "",
+        }
+		,
+		  {
+          title: "EF多表关联",
           content: [
             `<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
 	<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
-		<br />
 		<div>
-			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//4、获取Memory/Redis对象</span>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//EF多表关联查询,除了&nbsp;dbContext.Set&lt;Sys_Menu&gt;()这里获取dbcontext的区别，其他与原生EF操作一样</span>
 		</div>
 		<div>
-			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//&nbsp;base.CacheContext&nbsp;(仅限表xxx.Serivce.cs)</span>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//注：如果需要多表关联并且需要在页面显示，请创建视图，再生成代码，如果还需要操作增加、删除、修改等，见最下面视图操作</span>
+		</div>
+<br />
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//其他多表关联操作，可以写原生sql，使用&nbsp;&nbsp;DBServerProvider.SqlDapper.QueryList调用，见上面dapper操作</span>
 		</div>
 		<div>
-			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//&nbsp;例：SellOrderService.Instance.CacheContext</span>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">List</span>&lt;<span style="color:#9cdcfe;">Permissions</span>&gt;&nbsp;<span style="color:#9cdcfe;">_permissions</span>&nbsp;=&nbsp;(<span style="color:#9cdcfe;">from</span>&nbsp;<span style="color:#9cdcfe;">a</span>&nbsp;<span style="color:#569cd6;">in</span>&nbsp;<span style="color:#9cdcfe;">dbContext</span>.<span style="color:#dcdcaa;">Set</span>&lt;<span style="color:#4ec9b0;">Sys_Menu</span>&gt;()
 		</div>
 		<div>
-			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//&nbsp; Core.Utilities.HttpContext.Current.GetService&lt;ICacheService&gt;();</span>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">join</span>&nbsp;<span style="color:#9cdcfe;">b</span>&nbsp;<span style="color:#569cd6;">in</span>&nbsp;<span style="color:#9cdcfe;">dbContext</span>.<span style="color:#dcdcaa;">Set</span>&lt;<span style="color:#4ec9b0;">Sys_RoleAuth</span>&gt;()
 		</div>
 		<div>
-			<br />
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">on</span>&nbsp;<span style="color:#9cdcfe;">a</span>.<span style="color:#9cdcfe;">Menu_Id</span>&nbsp;<span style="color:#9cdcfe;">equals</span>&nbsp;<span style="color:#9cdcfe;">b</span>.<span style="color:#9cdcfe;">Menu_Id</span>
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">where</span>&nbsp;<span style="color:#9cdcfe;">b</span>.<span style="color:#9cdcfe;">Role_Id</span>&nbsp;==&nbsp;<span style="color:#9cdcfe;">roleId</span>&nbsp;&nbsp;&amp;&amp;&nbsp;<span style="color:#9cdcfe;">b</span>.<span style="color:#9cdcfe;">AuthValue</span>&nbsp;!=&nbsp;<span style="color:#ce9178;">""</span>
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">orderby</span>&nbsp;<span style="color:#9cdcfe;">a</span>.<span style="color:#9cdcfe;">ParentId</span>
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">select</span>&nbsp;<span style="color:#569cd6;">new</span>&nbsp;<span style="color:#9cdcfe;">Permissions</span>
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">Menu_Id</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">a</span>.<span style="color:#9cdcfe;">Menu_Id</span>,
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">ParentId</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">a</span>.<span style="color:#9cdcfe;">ParentId</span>,
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">TableName</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">a</span>.<span style="color:#9cdcfe;">TableName</span>,
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">MenuAuth</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">a</span>.<span style="color:#9cdcfe;">Auth</span>,
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">UserAuth</span>&nbsp;=&nbsp;<span style="color:#9cdcfe;">b</span>.<span style="color:#9cdcfe;">AuthValue</span>
+		</div>
+		<div>
+			&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}).<span style="color:#dcdcaa;">ToList</span>();
+		</div>
+<br />
+	</div>
+<br />
+</div>`,
+          ],
+          tips: `还没想好`,
+          img: "",
+        },
+		     {
+          title: "获取用户所有子角色",
+          content: [
+            `<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+	<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+		<div>
+			<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+				<div>
+					&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//获取所有子角色下面的所有用户，注意这里返回的是一个IQueryable，可以结合EF使用，或者tolist</span>
+				</div>
+				<div>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">RoleContext</span>.<span style="color:#dcdcaa;">GetCurrentAllChildUser</span>();
+				</div>
+				<div>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//获取当前用户的所有子角色信息</span>
+				</div>
+				<div>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">RoleContext</span>.<span style="color:#dcdcaa;">GetAllChildren</span>(<span style="color:#9cdcfe;">UserContext</span>.<span style="color:#9cdcfe;">Current</span>.<span style="color:#9cdcfe;">UserId</span>);
+				</div>
+				<div>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#6a9955;">//获取当前用户的所有子角色id</span>
+				</div>
+				<div>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#9cdcfe;">RoleContext</span>.<span style="color:#dcdcaa;">GetAllChildrenIds</span>(<span style="color:#9cdcfe;">UserContext</span>.<span style="color:#9cdcfe;">Current</span>.<span style="color:#9cdcfe;">UserId</span>);
+				</div>
+			</div>
 		</div>
 	</div>
+<br />
+</div>`,
+          ],
+          tips: `还没想好`,
+          img: "",
+        },
+        {
+          title: "使用Memory/Redis缓存",
+          content: [
+            `<div style="color:#D4D4D4;background-color:#1E1E1E;font-family:Consolas, &quot;font-size:14px;line-height:19px;white-space:pre;">
+<p>//以SellOrderService为例，在构造方法中获取对象</p>
+	<span style="display:none;"></span>&nbsp; &nbsp; &nbsp; &nbsp; [ActivatorUtilitiesConstructor]<br />
+&nbsp; &nbsp; &nbsp; &nbsp; private ICacheService _cacheService;<br />
+&nbsp; &nbsp; &nbsp; &nbsp; public SellOrderService(ICacheService cacheService)<br />
+&nbsp; &nbsp; &nbsp; &nbsp; {<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; //默认使用的内存缓存，如果需要使用redis将appsetting.json中设置UseRedis:"true"<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; _cacheService = cacheService;<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; //HttpContext.Current.GetService&lt;ICacheService&gt;()<br />
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; //base.CacheContext (仅限表xxx.Serivce.cs)<br />
+&nbsp; &nbsp; &nbsp; &nbsp; }<span style="display:none;"></span><br />
 </div>`,
           ],
           tips: `还没想好`,
@@ -442,11 +890,11 @@ export default {
           ],
           tips: ` 还没想好`,
           img: "",
-		},
-		      {
+        },
+        {
           title: "自定义字典sql数据源",
           content: [
-			`<p>1、在菜单：【系统】->【下拉框绑定设置】中设置sql语句，再刷新页面，代码生成器中选配置的字典编号，生成vue页面</p>
+            `<p>1、在菜单：【系统】->【下拉框绑定设置】中设置sql语句，再刷新页面，代码生成器中选配置的字典编号，生成vue页面</p>
 			<p>2、如果需要根据信息加载不同的数据源，先操作步骤1,后台文件：DictionaryHandler.GetCustomDBSql方法编写实际sql</p>`,
           ],
           tips: ` 还没想好`,
@@ -1600,7 +2048,7 @@ h2 {
   padding: 10px;
   a {
     font-size: 20px;
-    margin: 0 20px;
+    margin: 0 10px;
     line-height: 30px;
     padding: 4px 0;
     border-bottom: 1px solid;
