@@ -1,10 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Storage;
+using OfficeOpenXml.FormulaParsing.Excel.Functions.Text;
 using System;
 using System.Collections.Generic;
-using System.Data.Common;
-using System.Data.SqlClient;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
@@ -414,8 +414,9 @@ namespace VOL.Core.BaseProvider
             string message = "";
             if (updateDetail)
             {
+                string detailTypeName = typeof(List<Detail>).FullName;
                 PropertyInfo[] properties = typeof(TEntity).GetProperties();
-                PropertyInfo detail = properties.Where(x => x.PropertyType.Name == "List`1").ToList().FirstOrDefault();
+                PropertyInfo detail = properties.Where(x => x.PropertyType.FullName == detailTypeName).ToList().FirstOrDefault();
                 if (detail != null)
                 {
                     PropertyInfo key = properties.GetKeyProperty();
@@ -514,13 +515,29 @@ namespace VOL.Core.BaseProvider
         public virtual int DeleteWithKeys(object[] keys, bool delList = false)
         {
             Type entityType = typeof(TEntity);
-            string tKey = entityType.GetKeyProperty().Name;
+            var keyProperty = entityType.GetKeyProperty();
+            string tKey = keyProperty.Name;
+            List<T> list = new List<T>();
+            if (keyProperty.PropertyType == typeof(string))
+            {
+                foreach (var key in keys.Distinct())
+                {
+                    var entity = Activator.CreateInstance<T>();
+                    keyProperty.SetValue(entity, key);
+                    list.Add(entity);
+                }
+                DbContext.RemoveRange(list);
+                DbContext.SaveChanges();
+                return keys.Length;
+            }
+
+
             FieldType fieldType = entityType.GetFieldType();
             string joinKeys = (fieldType == FieldType.Int || fieldType == FieldType.BigInt)
                  ? string.Join(",", keys)
                  : $"'{string.Join("','", keys)}'";
 
-            string sql = $"DELETE FROM {entityType.GetEntityTableName() } where {tKey} in ({joinKeys});";
+            string sql = $"DELETE FROM {entityType.GetEntityTableName()} where {tKey} in ({joinKeys});";
             if (delList)
             {
                 Type detailType = entityType.GetCustomAttribute<EntityAttribute>().DetailTable?[0];
@@ -536,7 +553,7 @@ namespace VOL.Core.BaseProvider
             return DBSet.AddRangeAsync(entities);
         }
 
-        public virtual Task AddRangeAsync(TEntity entities)
+        public virtual Task AddRangeAsync(IEnumerable<TEntity> entities)
         {
             return DBSet.AddRangeAsync(entities);
         }
@@ -612,5 +629,50 @@ namespace VOL.Core.BaseProvider
             return DBSet.FromSqlInterpolated(sql);
         }
 
+        /// <summary>
+        /// 取消上下文跟踪
+        /// </summary>
+        /// <param name="entity"></param>
+        public virtual void Detached(TEntity entity)
+        {
+            DbContext.Entry(entity).State = EntityState.Detached;
+        }
+        public virtual void DetachedRange(IEnumerable<TEntity> entities)
+        {
+            foreach (var entity in entities)
+            {
+                DbContext.Entry(entity).State = EntityState.Detached;
+            }
+        }
+
+        /// <summary>
+        /// 查询字段不为null或者为空
+        /// </summary>
+        /// <param name="field">x=>new {x.字段}</param>
+        /// <param name="value">查询的类</param>
+        /// <param name="linqExpression">查询类型</param>
+        /// <returns></returns>
+        public virtual IQueryable<TEntity> WhereIF([NotNull] Expression<Func<TEntity, object>> field, string value, LinqExpressionType linqExpression = LinqExpressionType.Equal)
+        {
+            return EFContext.Set<TEntity>().WhereNotEmpty(field, value, linqExpression);
+        }
+
+        public virtual IQueryable<TEntity> WhereIF(bool checkCondition, Expression<Func<TEntity, bool>> predicate)
+        {
+            if (checkCondition)
+            {
+                return EFContext.Set<TEntity>().Where(predicate);
+            }
+            return EFContext.Set<TEntity>();
+        }
+
+        public virtual IQueryable<T> WhereIF<T>(bool checkCondition, Expression<Func<T, bool>> predicate) where T : class
+        {
+            if (checkCondition)
+            {
+                return EFContext.Set<T>().Where(predicate);
+            }
+            return EFContext.Set<T>();
+        }
     }
 }

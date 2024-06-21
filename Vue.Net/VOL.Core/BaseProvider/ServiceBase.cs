@@ -1,13 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
-using OfficeOpenXml.FormulaParsing.Excel.Functions.Logical;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using VOL.Core.CacheManager;
 using VOL.Core.Configuration;
 using VOL.Core.Const;
@@ -19,6 +17,7 @@ using VOL.Core.ManageUser;
 using VOL.Core.Services;
 using VOL.Core.Tenancy;
 using VOL.Core.Utilities;
+using VOL.Core.WorkFlow;
 using VOL.Entity;
 using VOL.Entity.DomainModels;
 using VOL.Entity.SystemModels;
@@ -77,19 +76,27 @@ namespace VOL.Core.BaseProvider
 
         }
 
+        protected virtual Type GetRealDetailType()
+        {
+            return typeof(T).GetCustomAttribute<EntityAttribute>()?.DetailTable?[0];
+        }
+
         /// <summary>
         ///  2020.08.15添加自定义原生查询sql或多租户(查询、导出)
         /// </summary>
         /// <returns></returns>
         private IQueryable<T> GetSearchQueryable()
         {
+            //2021.08.22移除数据隔离(租房管理)超级管理员的判断
             //没有自定sql与多租户执行默认查询
-            if ((QuerySql == null && !IsMultiTenancy) || UserContext.Current.IsSuperAdmin)
+            if (QuerySql == null && !IsMultiTenancy)
+            //  if ((QuerySql == null && !IsMultiTenancy) || UserContext.Current.IsSuperAdmin)
             {
                 return repository.DbContext.Set<T>();
             }
             //自定sql,没有使用多租户，直接执行自定义sql
-            if ((QuerySql != null && !IsMultiTenancy) || UserContext.Current.IsSuperAdmin)
+            if (QuerySql != null && !IsMultiTenancy)
+            // if ((QuerySql != null && !IsMultiTenancy) || UserContext.Current.IsSuperAdmin)
             {
                 return repository.DbContext.Set<T>().FromSqlRaw(QuerySql);
             }
@@ -117,7 +124,7 @@ namespace VOL.Core.BaseProvider
             //例如sql，只能(编辑)自己创建的数据:判断数据是不是当前用户创建的
             //sql = $" {sql} and createid!={UserContext.Current.UserId}";
             object obj = repository.DapperContext.ExecuteScalar(sql, null);
-            if (obj == null || obj.GetInt() > 0)
+            if (obj == null || obj.GetInt() == 0)
             {
                 Response.Error("不能编辑此数据");
             }
@@ -135,7 +142,8 @@ namespace VOL.Core.BaseProvider
             //例如sql，只能(删除)自己创建的数据:找出不是自己创建的数据
             //sql = $" {sql} and createid!={UserContext.Current.UserId}";
             object obj = repository.DapperContext.ExecuteScalar(sql, null);
-            if (obj == null || obj.GetInt() > 0)
+            int idsCount = ids.Split(",").Distinct().Count();
+            if (obj == null || obj.GetInt() != idsCount)
             {
                 Response.Error("不能删除此数据");
             }
@@ -153,34 +161,47 @@ namespace VOL.Core.BaseProvider
             {
                 return base.OrderByExpression.GetExpressionToDic();
             }
-            //排序字段不存在直接移除
-            if (!string.IsNullOrEmpty(pageData.Sort) && !propertyInfo.Any(x => x.Name.ToLower() == pageData.Sort.ToLower()))
+            if (!string.IsNullOrEmpty(pageData.Sort))
             {
-                pageData.Sort = null;
+                if (pageData.Sort.Contains(","))
+                {
+                    var sortArr = pageData.Sort.Split(",").Where(x => propertyInfo.Any(c => c.Name == x)).Select(s => s).Distinct().ToList();
+                    Dictionary<string, QueryOrderBy> sortDic = new Dictionary<string, QueryOrderBy>();
+                    foreach (var name in sortArr)
+                    {
+                        sortDic[name] = pageData.Order?.ToLower() == _asc ? QueryOrderBy.Asc : QueryOrderBy.Desc;
+                    }
+                    return sortDic;
+                }
+                else if (propertyInfo.Any(x => x.Name == pageData.Sort))
+                {
+                    return new Dictionary<string, QueryOrderBy>() { {
+                            pageData.Sort,
+                            pageData.Order?.ToLower() == _asc? QueryOrderBy.Asc: QueryOrderBy.Desc
+                     } };
+                }
             }
             //如果没有排序字段，则使用主键作为排序字段
-            if (string.IsNullOrEmpty(pageData.Sort))
+
+            PropertyInfo property = propertyInfo.GetKeyProperty();
+            //如果主键不是自增类型则使用appsettings.json中CreateMember->DateField配置的创建时间作为排序
+            if (property.PropertyType == typeof(int) || property.PropertyType == typeof(long))
             {
-                PropertyInfo property = propertyInfo.GetKeyProperty();
-                //如果主键不是自增类型则使用appsettings.json中CreateMember->DateField配置的创建时间作为排序
-                if (property.PropertyType == typeof(int) || property.PropertyType == typeof(long))
+                if (!propertyInfo.Any(x => x.Name.ToLower() == pageData.Sort))
                 {
-                    if (!propertyInfo.Any(x => x.Name.ToLower() == pageData.Sort))
-                    {
-                        pageData.Sort = propertyInfo.GetKeyName();
-                    }
+                    pageData.Sort = propertyInfo.GetKeyName();
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(AppSetting.CreateMember.DateField)
+                    && propertyInfo.Any(x => x.Name == AppSetting.CreateMember.DateField))
+                {
+                    pageData.Sort = AppSetting.CreateMember.DateField;
                 }
                 else
                 {
-                    if (!string.IsNullOrEmpty(AppSetting.CreateMember.DateField)
-                        && propertyInfo.Any(x => x.Name == AppSetting.CreateMember.DateField))
-                    {
-                        pageData.Sort = AppSetting.CreateMember.DateField;
-                    }
-                    else
-                    {
-                        pageData.Sort = propertyInfo.GetKeyName();
-                    }
+                    pageData.Sort = propertyInfo.GetKeyName();
                 }
             }
             return new Dictionary<string, QueryOrderBy>() { {
@@ -188,6 +209,17 @@ namespace VOL.Core.BaseProvider
                 } };
         }
 
+        /// <summary>
+        /// 前端查询条件转换为EF查询Queryable(2023.04.02)
+        /// </summary>
+        /// <param name="options">前端查询参数</param>
+        /// <param name="useTenancy">是否使用数据隔离</param>
+        /// <returns></returns>
+        public IQueryable<T> GetPageDataQueryFilter(PageDataOptions options, bool useTenancy = true)
+        {
+            ValidatePageOptions(options, out IQueryable<T> queryable, useTenancy);
+            return queryable;
+        }
 
         /// <summary>
         /// 验证排序与查询字段合法性
@@ -195,24 +227,37 @@ namespace VOL.Core.BaseProvider
         /// <param name="options"></param>
         /// <param name="queryable"></param>
         /// <returns></returns>
-        private PageDataOptions ValidatePageOptions(PageDataOptions options, out IQueryable<T> queryable)
+        protected PageDataOptions ValidatePageOptions(PageDataOptions options, out IQueryable<T> queryable, bool useTenancy = true)
         {
             options = options ?? new PageDataOptions();
 
             List<SearchParameters> searchParametersList = new List<SearchParameters>();
-            if (!string.IsNullOrEmpty(options.Wheres))
+            if (options.Filter != null && options.Filter.Count > 0)
+            {
+                searchParametersList.AddRange(options.Filter);
+            }
+            else if (!string.IsNullOrEmpty(options.Wheres))
             {
                 try
                 {
                     searchParametersList = options.Wheres.DeserializeObject<List<SearchParameters>>();
+                    options.Filter = searchParametersList;
                 }
                 catch { }
             }
             QueryRelativeList?.Invoke(searchParametersList);
+            if (useTenancy)
+            {
+                queryable = GetSearchQueryable();
+            }
+            else
+            {
+                queryable = repository.DbContext.Set<T>();
+            }
             //  Connection
             // queryable = repository.DbContext.Set<T>();
             //2020.08.15添加自定义原生查询sql或多租户
-            queryable = GetSearchQueryable();
+
 
             //判断列的数据类型数字，日期的需要判断值的格式是否正确
             for (int i = 0; i < searchParametersList.Count; i++)
@@ -262,7 +307,12 @@ namespace VOL.Core.BaseProvider
             }
             if (options.Export)
             {
-                pageGridData.rows = queryable.GetIQueryableOrderBy(orderbyDic).Take(Limit).ToList();
+                queryable = queryable.GetIQueryableOrderBy(orderbyDic);
+                if (Limit > 0)
+                {
+                    queryable = queryable.Take(Limit);
+                }
+                pageGridData.rows = queryable.ToList();
             }
             else
             {
@@ -316,13 +366,9 @@ namespace VOL.Core.BaseProvider
             var queryeable = repository.DbContext.Set<Detail>().Where(whereExpression);
 
             gridData.total = queryeable.Count();
+            options.Sort = options.Sort ?? typeof(Detail).GetKeyName();
+            Dictionary<string, QueryOrderBy> orderBy = GetPageDataSort(options, typeof(Detail).GetProperties());
 
-            string sortName = options.Sort ?? typeof(Detail).GetKeyName();
-            Dictionary<string, QueryOrderBy> orderBy = new Dictionary<string, QueryOrderBy>() { {
-                     sortName,
-                     options.Order == "asc" ?
-                     QueryOrderBy.Asc :
-                     QueryOrderBy.Desc } };
             gridData.rows = queryeable
                  .GetIQueryableOrderBy(orderBy)
                 .Skip((options.Page - 1) * options.Rows)
@@ -343,26 +389,28 @@ namespace VOL.Core.BaseProvider
         {
             if (files == null || files.Count == 0) return Response.Error("请上传文件");
 
-            var limitFiles = files.Where(x => x.Length > LimitUpFileSizee * 1024 * 1024).Select(s => s.FileName);
-            if (limitFiles.Count() > 0)
+            string filePath;
+            if (!string.IsNullOrEmpty(UploadFolder))
             {
-                return Response.Error($"文件大小不能超过：{ LimitUpFileSizee}M,{string.Join(",", limitFiles)}");
+                filePath = UploadFolder;
+                if (!filePath.EndsWith("/") || !filePath.EndsWith("\\"))
+                {
+                    filePath += "/";
+                }
             }
-            string filePath = $"Upload/Tables/{typeof(T).GetEntityTableName()}/{DateTime.Now.ToString("yyyMMddHHmmsss") + new Random().Next(1000, 9999)}/";
+            else
+            {
+                filePath = $"Upload/Tables/{typeof(T).GetEntityTableName()}/{DateTime.Now.ToString("yyyMMddHHmmsss") + new Random().Next(1000, 9999)}/";
+            }
+
             string fullPath = filePath.MapPath(true);
             int i = 0;
-            //   List<string> fileNames = new List<string>();
             try
             {
                 if (!Directory.Exists(fullPath)) Directory.CreateDirectory(fullPath);
                 for (i = 0; i < files.Count; i++)
                 {
                     string fileName = files[i].FileName;
-                    //if (fileNames.Contains(fileName))
-                    //{
-                    //    fileName += $"({i}){fileName}";
-                    //}
-                    //fileNames.Add(fileName);
                     using (var stream = new FileStream(fullPath + fileName, FileMode.Create))
                     {
                         files[i].CopyTo(stream);
@@ -417,27 +465,36 @@ namespace VOL.Core.BaseProvider
             }
             try
             {
-                Response = EPPlusHelper.ReadToDataTable<T>(dicPath, DownLoadTemplateColumns, GetIgnoreTemplate());
+                //2022.06.20增加原生excel读取方法(导入时可以自定义读取excel内容)
+                Response = EPPlusHelper.ReadToDataTable<T>(dicPath, DownLoadTemplateColumns, GetIgnoreTemplate(), readValue: ImportOnReadCellValue, ignoreSelectValidationColumns: ImportIgnoreSelectValidationColumns);
             }
             catch (Exception ex)
             {
                 Response.Error("未能处理导入的文件,请检查导入的文件是否正确");
-                Logger.Error($"表{typeof(T).GetEntityTableCnName()}导入失败{ex.Message + ex.InnerException?.Message}");
+                string msg = $"表{typeof(T).GetEntityTableCnName()}导入失败{ex.Message + ex.InnerException?.Message}";
+                Console.WriteLine(msg);
+                Logger.Error(msg);
             }
-            if (!Response.Status) return Response;
+            if (CheckResponseResult()) return Response;
             List<T> list = Response.Data as List<T>;
             if (ImportOnExecuting != null)
             {
                 Response = ImportOnExecuting.Invoke(list);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
+            }
+            //2022.01.08增加明细表导入判断
+            if (HttpContext.Current.Request.Query.ContainsKey("table"))
+            {
+                ImportOnExecuted?.Invoke(list);
+                return Response.OK("文件上传成功", list.Serialize());
             }
             repository.AddRange(list, true);
             if (ImportOnExecuted != null)
             {
                 Response = ImportOnExecuted.Invoke(list);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
-            return new WebResponseContent { Status = true, Message = "文件上传成功" };
+            return Response.OK("文件上传成功");
         }
 
         /// <summary>
@@ -457,11 +514,18 @@ namespace VOL.Core.BaseProvider
             if (ExportOnExecuting != null)
             {
                 Response = ExportOnExecuting(list, ignoreColumn);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
+            if (ExportColumns != null)
+            {
+                ExportColumnsArray = ExportColumns.GetExpressionToArray();
+            }
+
             //ExportColumns 2020.05.07增加扩展指定导出模板的列
-            EPPlusHelper.Export(list, ExportColumns?.GetExpressionToArray(), ignoreColumn, savePath, fileName);
-            return Response.OK(null, (savePath + "/" + fileName).EncryptDES(AppSetting.Secret.ExportFile));
+            EPPlusHelper.Export(list, ExportColumnsArray, ignoreColumn, savePath, fileName);
+            //return Response.OK(null, (savePath + "/" + fileName).EncryptDES(AppSetting.Secret.ExportFile));
+            //2022.01.08优化导出功能
+            return Response.OK(null, (savePath + "/" + fileName));
         }
 
         /// <summary>
@@ -474,7 +538,7 @@ namespace VOL.Core.BaseProvider
             if (AddOnExecute != null)
             {
                 Response = AddOnExecute(saveDataModel);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
             if (saveDataModel == null
                 || saveDataModel.MainData == null
@@ -483,6 +547,9 @@ namespace VOL.Core.BaseProvider
 
             saveDataModel.DetailData = saveDataModel.DetailData?.Where(x => x.Count > 0).ToList();
             Type type = typeof(T);
+            // 修改为与Update一致，先设置默认值再进行实体的校验
+            UserInfo userInfo = UserContext.Current.UserInfo;
+            saveDataModel.SetDefaultVal(AppSetting.CreateMember, userInfo);
 
             string validReslut = type.ValidateDicInEntity(saveDataModel.MainData, true, UserIgnoreFields);
 
@@ -491,11 +558,8 @@ namespace VOL.Core.BaseProvider
             if (saveDataModel.MainData.Count == 0)
                 return Response.Error("保存的数据为空，请检查model是否配置正确!");
 
-            UserInfo userInfo = UserContext.Current.UserInfo;
-            saveDataModel.SetDefaultVal(AppSetting.CreateMember, userInfo);
-
             PropertyInfo keyPro = type.GetKeyProperty();
-            if (keyPro.PropertyType == typeof(Guid))
+            if (keyPro.PropertyType == typeof(Guid) || keyPro.PropertyType == typeof(string))
             {
                 saveDataModel.MainData.Add(keyPro.Name, Guid.NewGuid());
             }
@@ -507,10 +571,11 @@ namespace VOL.Core.BaseProvider
             if (saveDataModel.DetailData == null || saveDataModel.DetailData.Count == 0)
             {
                 T mainEntity = saveDataModel.MainData.DicToEntity<T>();
+                SetAuditDefaultValue(mainEntity);
                 if (base.AddOnExecuting != null)
                 {
                     Response = base.AddOnExecuting(mainEntity, null);
-                    if (!Response.Status) return Response;
+                    if (CheckResponseResult()) return Response;
                 }
                 Response = repository.DbContextBeginTransaction(() =>
                 {
@@ -524,10 +589,11 @@ namespace VOL.Core.BaseProvider
                     return Response;
                 });
                 if (Response.Status) Response.Data = new { data = saveDataModel.MainData };
+                AddProcese(mainEntity);
                 return Response;
             }
 
-            Type detailType = typeof(T).GetCustomAttribute<EntityAttribute>().DetailTable[0];
+            Type detailType = GetRealDetailType();
 
             return typeof(ServiceBase<T, TRepository>)
                 .GetMethod("Add", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -553,20 +619,21 @@ namespace VOL.Core.BaseProvider
         {
             //设置用户默认值
             entity.SetCreateDefaultVal();
+            SetAuditDefaultValue(entity);
             if (validationEntity)
             {
                 Response = entity.ValidationEntity();
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
                 if (list != null && list.Count > 0)
                 {
                     Response = list.ValidationEntity();
-                    if (!Response.Status) return Response;
+                    if (CheckResponseResult()) return Response;
                 }
             }
             if (this.AddOnExecuting != null)
             {
                 Response = AddOnExecuting(entity, list);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
             Response = repository.DbContextBeginTransaction(() =>
             {
@@ -595,8 +662,51 @@ namespace VOL.Core.BaseProvider
                 return Response;
             });
             if (Response.Status && string.IsNullOrEmpty(Response.Message))
+            {
                 Response.OK(ResponseType.SaveSuccess);
+            }
+            AddProcese(entity);
             return Response;
+        }
+
+        /// <summary>
+        /// 设置审批字段默认值
+        /// </summary>
+        /// <param name="entity"></param>
+        private void SetAuditDefaultValue(T entity)
+        {
+            if (!WorkFlowManager.Exists<T>())
+            {
+                return;
+            }
+            var propertity = TProperties.Where(x => x.Name.ToLower() == "auditstatus").FirstOrDefault();
+            if (propertity != null && propertity.GetValue(entity) == null)
+            {
+                propertity.SetValue(entity, 0);
+            }
+        }
+        /// <summary>
+        /// 写入流程
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="entity"></param>
+        /// <param name="changeTableStatus">是否修改原表的审批状态</param>
+        protected void RewriteFlow(T entity, bool changeTableStatus = true)
+        {
+            WorkFlowManager.AddProcese(entity, true, changeTableStatus);
+        }
+        private void AddProcese(T entity)
+        {
+            if (!CheckResponseResult() && WorkFlowManager.Exists<T>())
+            {
+                if (AddWorkFlowExecuting != null && !AddWorkFlowExecuting.Invoke(entity))
+                {
+                    return;
+                }
+                //写入流程
+                WorkFlowManager.AddProcese<T>(entity, addWorkFlowExecuted: AddWorkFlowExecuted);
+                //   WorkFlowManager.Audit<T>(entity, AuditStatus.待审核, null, null, null, null, init: true, initInvoke: AddWorkFlowExecuted);
+            }
         }
 
         public void AddDetailToDBSet<TDetail>() where TDetail : class
@@ -617,7 +727,7 @@ namespace VOL.Core.BaseProvider
             Response = Add<TDetail>(mainEntity, list, false);
 
             //保存失败
-            if (!Response.Status)
+            if (CheckResponseResult())
             {
                 Logger.Error(LoggerType.Add, saveDataModel.Serialize() + Response.Message);
                 return Response;
@@ -662,15 +772,15 @@ namespace VOL.Core.BaseProvider
         {
             T mainEnity = saveModel.MainData.DicToEntity<T>();
             List<DetailT> detailList = saveModel.DetailData.DicToList<DetailT>();
+            //2021.08.21优化明细表删除
             //删除的主键
-
             //查出所有明细表数据的ID
-            System.Collections.IList detailKeys = this.GetType().GetMethod("GetUpdateDetailSelectKeys")
-                    .MakeGenericMethod(new Type[] { typeof(DetailT), detailKeyInfo.PropertyType })
-                    .Invoke(this, new object[] {
-                        detailKeyInfo.Name, mainKeyProperty.Name,
-                        saveModel.MainData[mainKeyProperty.Name].ToString()
-                    }) as System.Collections.IList;
+            //System.Collections.IList detailKeys = this.GetType().GetMethod("GetUpdateDetailSelectKeys")
+            //        .MakeGenericMethod(new Type[] { typeof(DetailT), detailKeyInfo.PropertyType })
+            //        .Invoke(this, new object[] {
+            //            detailKeyInfo.Name, mainKeyProperty.Name,
+            //            saveModel.MainData[mainKeyProperty.Name].ToString()
+            //        }) as System.Collections.IList;
 
             //新增对象
             List<DetailT> addList = new List<DetailT>();
@@ -697,7 +807,7 @@ namespace VOL.Core.BaseProvider
                     }
                     addList.Add(item);
                 }
-                else if (detailKeys.Contains(value))
+                else //if (detailKeys.Contains(value))
                 {
                     //containsKeys.Add(value);
                     editList.Add(item);
@@ -707,15 +817,16 @@ namespace VOL.Core.BaseProvider
             //获取需要删除的对象的主键
             if (saveModel.DelKeys != null && saveModel.DelKeys.Count > 0)
             {
-                delKeys = saveModel.DelKeys
-                    .Where(x => detailKeys.Contains(x.ChangeType(detailKeyInfo.PropertyType)))
-                    .Select(q => q.ChangeType(detailKeyInfo.PropertyType)).ToList();
+                //2021.08.21优化明细表删除
+                delKeys = saveModel.DelKeys.Select(q => q.ChangeType(detailKeyInfo.PropertyType)).Where(x => x != null).ToList();
+                //.Where(x => detailKeys.Contains(x.ChangeType(detailKeyInfo.PropertyType)))
+                //.Select(q => q.ChangeType(detailKeyInfo.PropertyType)).ToList();
             }
 
             if (UpdateOnExecuting != null)
             {
                 Response = UpdateOnExecuting(mainEnity, addList, editList, delKeys);
-                if (!Response.Status)
+                if (CheckResponseResult())
                     return Response;
             }
             mainEnity.SetModifyDefaultVal();
@@ -724,25 +835,26 @@ namespace VOL.Core.BaseProvider
             repository.Update(mainEnity, typeof(T).GetEditField()
                 .Where(c => saveModel.MainData.Keys.Contains(c) && !CreateFields.Contains(c))
                 .ToArray());
-            foreach (var item in saveModel.DetailData)
-            {
-                item.SetModifyDefaultVal();
-            }
+            //foreach (var item in saveModel.DetailData)
+            //{
+            //    item.SetModifyDefaultVal();
+            //}
             //明细修改
             editList.ForEach(x =>
             {
                 //获取编辑的字段
-                string[] updateField = saveModel.DetailData
+                var updateField = saveModel.DetailData
                     .Where(c => c[detailKeyInfo.Name].ChangeType(detailKeyInfo.PropertyType)
                     .Equal(detailKeyInfo.GetValue(x)))
                     .FirstOrDefault()
                     .Keys.Where(k => k != detailKeyInfo.Name)
                     .Where(r => !CreateFields.Contains(r))
-                    .ToArray();
+                    .ToList();
+                updateField.AddRange(ModifyFields);
                 //設置默認值
                 x.SetModifyDefaultVal();
                 //添加修改字段
-                repository.Update<DetailT>(x, updateField);
+                repository.Update<DetailT>(x, updateField.ToArray());
             });
 
             //明细新增
@@ -838,11 +950,21 @@ namespace VOL.Core.BaseProvider
             if (UpdateOnExecute != null)
             {
                 Response = UpdateOnExecute(saveModel);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
             if (saveModel == null)
                 return Response.Error(ResponseType.ParametersLack);
 
+
+            //if (WorkFlowManager.Exists<T>())
+            //{
+            //    var auditProperty = TProperties.Where(x => x.Name.ToLower() == "auditstatus").FirstOrDefault();
+            //    string value = saveModel.MainData[auditProperty.Name]?.ToString();
+            //    if (WorkFlowManager.GetAuditStatus<T>(value) != 1)
+            //    {
+            //        return Response.Error("数据已经在审核中，不能修改");
+            //    }
+            //}
             Type type = typeof(T);
 
             //设置修改时间,修改人的默认值
@@ -858,16 +980,18 @@ namespace VOL.Core.BaseProvider
             PropertyInfo mainKeyProperty = type.GetKeyProperty();
             //验证明细
             Type detailType = null;
-            if (saveModel.DetailData != null || saveModel.DelKeys != null)
+            if (saveModel.DetailData != null || (saveModel.DelKeys != null && saveModel.DelKeys.Count > 0))
             {
-                saveModel.DetailData = saveModel.DetailData == null
-                    ? new List<Dictionary<string, object>>()
-                    : saveModel.DetailData.Where(x => x.Count > 0).ToList();
+                detailType = GetRealDetailType();
+                if (detailType != null)
+                {
+                    saveModel.DetailData = saveModel.DetailData == null
+                                           ? new List<Dictionary<string, object>>()
+                                           : saveModel.DetailData.Where(x => x.Count > 0).ToList();
 
-                detailType = typeof(T).GetCustomAttribute<EntityAttribute>().DetailTable[0];
-
-                result = detailType.ValidateDicInEntity(saveModel.DetailData, true, false, new string[] { mainKeyProperty.Name });
-                if (result != string.Empty) return Response.Error(result);
+                    result = detailType.ValidateDicInEntity(saveModel.DetailData, true, false, new string[] { mainKeyProperty.Name });
+                    if (result != string.Empty) return Response.Error(result);
+                }
 
                 //主从关系指定外键,即从表的外键可以不是主键的主表,还需要改下代码生成器设置属性外键,功能预留后面再开发(2020.04.25)
                 //string foreignKey = type.GetTypeCustomValue<System.ComponentModel.DataAnnotations.Schema.ForeignKeyAttribute>(x => new { x.Name });
@@ -882,8 +1006,11 @@ namespace VOL.Core.BaseProvider
             }
 
             //获取主建类型的默认值用于判断后面数据是否正确,int long默认值为0,guid :0000-000....
-            object keyDefaultVal = mainKeyProperty.PropertyType.Assembly.CreateInstance(mainKeyProperty.PropertyType.FullName);//.ToString();
-                                                                                                                               //判断是否包含主键
+            object keyDefaultVal =
+                mainKeyProperty.PropertyType == typeof(string)
+                ? ""
+                : mainKeyProperty.PropertyType.Assembly.CreateInstance(mainKeyProperty.PropertyType.FullName);//.ToString();
+                                                                                                              //判断是否包含主键
             if (mainKeyProperty == null
                 || !saveModel.MainData.ContainsKey(mainKeyProperty.Name)
                 || saveModel.MainData[mainKeyProperty.Name] == null
@@ -912,7 +1039,7 @@ namespace VOL.Core.BaseProvider
             if (IsMultiTenancy && !UserContext.Current.IsSuperAdmin)
             {
                 CheckUpdateMultiTenancy(mainKeyProperty.PropertyType == typeof(Guid) ? "'" + mainKeyVal.ToString() + "'" : mainKeyVal.ToString(), mainKeyProperty.Name);
-                if (!Response.Status)
+                if (CheckResponseResult())
                 {
                     return Response;
                 }
@@ -929,7 +1056,7 @@ namespace VOL.Core.BaseProvider
                 if (UpdateOnExecuting != null)
                 {
                     Response = UpdateOnExecuting(mainEntity, null, null, null);
-                    if (!Response.Status) return Response;
+                    if (CheckResponseResult()) return Response;
                 }
                 //不修改!CreateFields.Contains创建人信息
                 repository.Update(mainEntity, type.GetEditField().Where(c => saveModel.MainData.Keys.Contains(c) && !CreateFields.Contains(c)).ToArray());
@@ -983,7 +1110,7 @@ namespace VOL.Core.BaseProvider
 
                 //主键值是否正确
                 string detailKeyVal = dic[detailKeyInfo.Name].ToString();
-                if (!mainKeyProperty.ValidationValueForDbType(detailKeyVal).FirstOrDefault().Item1
+                if (!detailKeyInfo.ValidationValueForDbType(detailKeyVal).FirstOrDefault().Item1
                     || deatilDefaultVal == detailKeyVal)
                     return Response.Error(ResponseType.KeyError);
 
@@ -1028,33 +1155,47 @@ namespace VOL.Core.BaseProvider
             if (DelOnExecuting != null)
             {
                 Response = DelOnExecuting(keys);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
 
+            if (keyProperty.PropertyType == typeof(string))
+            {
+                Response = repository.DbContextBeginTransaction(() =>
+                {
+                    repository.DeleteWithKeys(keys);
+                    if (DelOnExecuted != null)
+                    {
+                        Response = DelOnExecuted(keys);
+                    }
+                    return Response;
+                });
+                if (Response.Status && string.IsNullOrEmpty(Response.Message)) Response.OK(ResponseType.DelSuccess);
+                return Response;
+            }
             FieldType fieldType = entityType.GetFieldType();
             string joinKeys = (fieldType == FieldType.Int || fieldType == FieldType.BigInt)
                  ? string.Join(",", keys)
                  : $"'{string.Join("','", keys)}'";
 
             // 2020.08.15添加判断多租户数据（删除）
-            if (IsMultiTenancy && !UserContext.Current.IsSuperAdmin)
-            {
-                CheckDelMultiTenancy(joinKeys, tKey);
-                if (!Response.Status)
-                {
-                    return Response;
-                }
-            }
+            //if (IsMultiTenancy && !UserContext.Current.IsSuperAdmin)
+            //{
+            //    CheckDelMultiTenancy(joinKeys, tKey);
+            //    if (CheckResponseResult())
+            //    {
+            //        return Response;
+            //    }
+            //}
 
-            string sql = $"DELETE FROM {entityType.GetEntityTableName() } where {tKey} in ({joinKeys});";
+            string sql = $"DELETE FROM {entityType.GetEntityTableName()} where {tKey} in ({joinKeys});";
             // 2020.08.06增加pgsql删除功能
             if (DBType.Name == DbCurrentType.PgSql.ToString())
             {
-                sql = $"DELETE FROM \"public\".\"{entityType.GetEntityTableName() }\" where \"{tKey}\" in ({joinKeys});";
+                sql = $"DELETE FROM \"public\".\"{entityType.GetEntityTableName()}\" where \"{tKey}\" in ({joinKeys});";
             }
             if (delList)
             {
-                Type detailType = entityType.GetCustomAttribute<EntityAttribute>()?.DetailTable?[0];
+                Type detailType = GetRealDetailType();
                 if (detailType != null)
                 {
                     if (DBType.Name == DbCurrentType.PgSql.ToString())
@@ -1100,8 +1241,39 @@ namespace VOL.Core.BaseProvider
         {
             if (keys == null || keys.Length == 0)
                 return Response.Error("未获取到参数!");
-            if (auditStatus != 1 && auditStatus != 2)
-                return Response.Error("请提求正确的审核结果!");
+
+            Expression<Func<T, bool>> whereExpression = typeof(T).GetKeyName().CreateExpression<T>(keys[0], LinqExpressionType.Equal);
+            T entity = repository.FindAsIQueryable(whereExpression).FirstOrDefault();
+            if (entity == null)
+            {
+                return Response.Error($"未查到数据,或者数据已被删除,id:{keys[0]}");
+            }
+            //进入流程审批
+            if (WorkFlowManager.Exists<T>(entity))
+            {
+                var auditProperty = TProperties.Where(x => x.Name.ToLower() == "auditstatus").FirstOrDefault();
+                if (auditProperty == null)
+                {
+                    return Response.Error("表缺少审核状态字段：AuditStatus");
+                }
+
+                AuditStatus status = (AuditStatus)Enum.Parse(typeof(AuditStatus), auditStatus.ToString());
+                int val = auditProperty.GetValue(entity).GetInt();
+                if (!(val == (int)AuditStatus.待审核 || val == (int)AuditStatus.审核中))
+                {
+                    return Response.Error("只能审批[待审核或审核中]的数据");
+                }
+                Response = repository.DbContextBeginTransaction(() =>
+                {
+                    return WorkFlowManager.Audit<T>(entity, status, auditReason, auditProperty, AuditWorkFlowExecuting, AuditWorkFlowExecuted);
+                });
+                if (Response.Status)
+                {
+                    return Response.OK(ResponseType.AuditSuccess);
+                }
+                return Response.Error(Response.Message ?? "审批失败");
+            }
+
 
             //获取主键
             PropertyInfo property = TProperties.GetKeyProperty();
@@ -1119,7 +1291,7 @@ namespace VOL.Core.BaseProvider
                 object convertVal = value.ToString().ChangeType(property.PropertyType);
                 if (convertVal == null) continue;
 
-                T entity = Activator.CreateInstance<T>();
+                entity = Activator.CreateInstance<T>();
                 property.SetValue(entity, convertVal);
                 foreach (var item in updateFileds)
                 {
@@ -1147,15 +1319,23 @@ namespace VOL.Core.BaseProvider
             if (base.AuditOnExecuting != null)
             {
                 Response = AuditOnExecuting(auditList);
-                if (!Response.Status) return Response;
+                if (CheckResponseResult()) return Response;
             }
-            repository.UpdateRange(auditList, updateFileds.Select(x => x.Name).ToArray(), true);
-            if (base.AuditOnExecuted != null)
+            Response = repository.DbContextBeginTransaction(() =>
             {
-                Response = AuditOnExecuted(auditList);
-                if (!Response.Status) return Response;
+                repository.UpdateRange(auditList, updateFileds.Select(x => x.Name).ToArray(), true);
+                if (base.AuditOnExecuted != null)
+                {
+                    Response = AuditOnExecuted(auditList);
+                    if (CheckResponseResult()) return Response;
+                }
+                return Response.OK();
+            });
+            if (Response.Status)
+            {
+                return Response.OK(ResponseType.AuditSuccess);
             }
-            return Response.OK(ResponseType.AuditSuccess);
+            return Response.Error(Response.Message);
         }
 
         public virtual (string, T, bool) ApiValidate(string bizContent, Expression<Func<T, object>> expression = null)
@@ -1199,7 +1379,7 @@ namespace VOL.Core.BaseProvider
                 {
                     Response = list[i].ValidationEntity(expression?.GetExpressionProperty(),
                         validateExpression?.GetExpressionProperty());
-                    if (!Response.Status)
+                    if (CheckResponseResult())
                         return (Response.Message, default(TInput), false);
                 }
                 return ("", input, true);
@@ -1248,6 +1428,14 @@ namespace VOL.Core.BaseProvider
         public virtual void MapValueToEntity<TSource, TResult>(TSource source, TResult result, Expression<Func<TResult, object>> expression = null) where TResult : class
         {
             source.MapValueToEntity<TSource, TResult>(result, expression);
+        }
+        /// <summary>
+        /// 2021.07.04增加code="-1"强制返回，具体使用见：后台开发文档->后台基础代码扩展实现
+        /// </summary>
+        /// <returns></returns>
+        private bool CheckResponseResult()
+        {
+            return !Response.Status || Response.Code == "-1";
         }
     }
 }

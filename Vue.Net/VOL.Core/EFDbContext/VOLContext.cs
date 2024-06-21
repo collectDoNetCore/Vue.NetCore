@@ -71,7 +71,7 @@ namespace VOL.Core.EFDbContext
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            string connectionString = DBServerProvider.GetConnectionString(null);
+            string connectionString = DBServerProvider.GetConnectionString(DataBaseName);
             if (Const.DBType.Name == Enums.DbCurrentType.MySql.ToString())
             {
                 optionsBuilder.UseMySql(connectionString);
@@ -99,7 +99,7 @@ namespace VOL.Core.EFDbContext
                 //获取所有类库
                 var compilationLibrary = DependencyContext
                     .Default
-                    .CompileLibraries
+                    .RuntimeLibraries
                     .Where(x => !x.Serviceable && x.Type != "package" && x.Type == "project");
                 foreach (var _compilation in compilationLibrary)
                 {

@@ -9,12 +9,11 @@ using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using System.Threading.Tasks;
 using VOL.Core.Const;
 using VOL.Core.DBManager;
 using VOL.Core.Enums;
 using VOL.Core.Extensions;
-using VOL.Core.Utilities;
-
 
 namespace VOL.Core.Dapper
 {
@@ -22,12 +21,16 @@ namespace VOL.Core.Dapper
     {
         private string _connectionString;
         private int? commandTimeout = null;
-
+        private DbCurrentType _dbCurrentType;
         public SqlDapper()
         {
             _connectionString = DBServerProvider.GetConnectionString();
         }
-
+        public SqlDapper(string connKeyName, DbCurrentType dbCurrentType)
+        {
+            _dbCurrentType = dbCurrentType;
+            _connectionString = DBServerProvider.GetConnectionString(connKeyName);
+        }
         public SqlDapper(string connKeyName)
         {
             _connectionString = DBServerProvider.GetConnectionString(connKeyName);
@@ -48,10 +51,9 @@ namespace VOL.Core.Dapper
             return this;
         }
 
-
         private T Execute<T>(Func<IDbConnection, IDbTransaction, T> func, bool beginTransaction = false)
         {
-            if (_transaction)
+            if (_transaction|| dbTransaction!=null)
             {
                 return func(_transactionConnection, dbTransaction);
             }
@@ -59,7 +61,7 @@ namespace VOL.Core.Dapper
             {
                 return ExecuteTransaction(func);
             }
-            using (var connection = DBServerProvider.GetDbConnection(_connectionString))
+            using (var connection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
             {
                 return func(connection, dbTransaction);
             }
@@ -67,7 +69,7 @@ namespace VOL.Core.Dapper
 
         private T ExecuteTransaction<T>(Func<IDbConnection, IDbTransaction, T> func)
         {
-            using (_transactionConnection = DBServerProvider.GetDbConnection(_connectionString))
+            using (_transactionConnection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
             {
                 try
                 {
@@ -89,6 +91,50 @@ namespace VOL.Core.Dapper
             }
         }
 
+        private async Task<T> ExecuteAsync<T>(Func<IDbConnection, IDbTransaction, Task<T>> funcAsync, bool beginTransaction = false)
+        {
+            if (_transaction || dbTransaction != null)
+            {
+                return await funcAsync(_transactionConnection, dbTransaction);
+            }
+            if (beginTransaction)
+            {
+                return await ExecuteTransactionAsync(funcAsync);
+            }
+            using (var connection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
+            {
+                T reslutT = await funcAsync(connection, dbTransaction);
+                if (!_transaction && dbTransaction != null)
+                {
+                    dbTransaction.Commit();
+                }
+                return reslutT;
+            }
+        }
+
+        private async Task<T> ExecuteTransactionAsync<T>(Func<IDbConnection, IDbTransaction, Task<T>> funcAsync)
+        {
+            using (var connection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
+            {
+                try
+                {
+                    connection.Open();
+                    dbTransaction = connection.BeginTransaction();
+                    T reslutT = await funcAsync(connection, dbTransaction);
+                    if (!_transaction && dbTransaction != null)
+                    {
+                        dbTransaction.Commit();
+                    }
+                    return reslutT;
+                }
+                catch (Exception ex)
+                {
+                    dbTransaction?.Rollback();
+                    throw ex;
+                }
+            }
+        }
+
         /// <summary>
         /// 2020.06.15增加Dapper事务处理
         /// <param name="action"></param>
@@ -96,7 +142,7 @@ namespace VOL.Core.Dapper
         public void BeginTransaction(Func<ISqlDapper, bool> action, Action<Exception> error)
         {
             _transaction = true;
-            using (var connection = DBServerProvider.GetDbConnection(_connectionString))
+            using (var connection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
             {
                 try
                 {
@@ -137,35 +183,92 @@ namespace VOL.Core.Dapper
         /// <param name="param"></param>
         /// <param name="commandType"></param>
         /// <returns></returns>
-        public List<T> QueryList<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false) where T : class
+        public List<T> QueryList<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
         {
             return Execute((conn, dbTransaction) =>
             {
                 return conn.Query<T>(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout).ToList();
             }, beginTransaction);
         }
+        public async Task<IEnumerable<T>> QueryListAsync<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                return await conn.QueryAsync<T>(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
+        }
+
+        public async Task<T> QueryFirstAsync<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false) where T : class
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                return await conn.QueryFirstOrDefaultAsync<T>(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
+        }
+
+
         public T QueryFirst<T>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false) where T : class
         {
-            return QueryList<T>(cmd, param, commandType: commandType ?? CommandType.Text, beginTransaction: beginTransaction).FirstOrDefault();
+            return Execute((conn, dbTransaction) =>
+            {
+                return conn.QueryFirstOrDefault<T>(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
+        }
+
+        public async Task<dynamic> QueryDynamicFirstAsync(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                return await conn.QueryFirstOrDefaultAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
+        }
+
+        public dynamic QueryDynamicFirst(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                return conn.QueryFirstOrDefault(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
+        }
+
+        public async Task<dynamic> QueryDynamicListAsync(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                return await conn.QueryAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
         }
 
         public List<dynamic> QueryDynamicList(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
         {
             return Execute((conn, dbTransaction) =>
             {
-                return conn.Query<dynamic>(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout).ToList();
+                return conn.Query(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout).ToList();
             }, beginTransaction);
         }
-        public dynamic QueryDynamicFirst(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+
+
+        public async Task<object> ExecuteScalarAsync(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
         {
-            return QueryList<dynamic>(cmd, param, commandType: commandType ?? CommandType.Text, beginTransaction: beginTransaction).FirstOrDefault();
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                return await conn.ExecuteScalarAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
         }
 
         public object ExecuteScalar(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
         {
-            return Execute<object>((conn, dbTransaction) =>
+            return Execute((conn, dbTransaction) =>
             {
                 return conn.ExecuteScalar(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+            }, beginTransaction);
+        }
+
+        public async Task<int> ExcuteNonQueryAsync(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                return await conn.ExecuteAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
             }, beginTransaction);
         }
 
@@ -176,13 +279,15 @@ namespace VOL.Core.Dapper
                 return conn.Execute(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
             }, beginTransaction);
         }
-        public IDataReader ExecuteReader(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
-        {
-            return Execute<IDataReader>((conn, dbTransaction) =>
-            {
-                return conn.ExecuteReader(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
-            }, beginTransaction);
-        }
+        //public IDataReader ExecuteReader(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        //{
+        //    return Execute<IDataReader>((conn, dbTransaction) =>
+        //    {
+        //        return conn.ExecuteReader(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout);
+        //    }, beginTransaction);
+        //}
+
+
         public SqlMapper.GridReader QueryMultiple(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
         {
             return Execute((conn, dbTransaction) =>
@@ -191,6 +296,17 @@ namespace VOL.Core.Dapper
             }, beginTransaction);
         }
 
+
+        public async Task<(IEnumerable<T1>, IEnumerable<T2>)> QueryMultipleAsync<T1, T2>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (await reader.ReadAsync<T1>(), await reader.ReadAsync<T2>());
+                }
+            }, beginTransaction);
+        }
 
         /// <summary>
         /// 获取output值 param.Get<int>("@b");
@@ -212,6 +328,41 @@ namespace VOL.Core.Dapper
             }, beginTransaction);
         }
 
+        public async Task<(IEnumerable<dynamic>, IEnumerable<dynamic>)> QueryDynamicMultipleAsync(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (await reader.ReadAsync(), await reader.ReadAsync());
+                }
+            }, beginTransaction);
+        }
+
+        public (List<dynamic>, List<dynamic>) QueryDynamicMultiple(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (reader.Read().ToList(), reader.Read().ToList());
+                }
+            }, beginTransaction);
+        }
+
+
+        public async Task<(IEnumerable<T1>, IEnumerable<T2>, IEnumerable<T3>)> QueryMultipleAsync<T1, T2, T3>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (await reader.ReadAsync<T1>(), await reader.ReadAsync<T2>(), await reader.ReadAsync<T3>());
+                }
+            }, beginTransaction);
+        }
+
+
         public (List<T1>, List<T2>, List<T3>) QueryMultiple<T1, T2, T3>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
         {
             return Execute((conn, dbTransaction) =>
@@ -219,6 +370,161 @@ namespace VOL.Core.Dapper
                 using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
                 {
                     return (reader.Read<T1>().ToList(), reader.Read<T2>().ToList(), reader.Read<T3>().ToList());
+                }
+            }, beginTransaction);
+        }
+
+        public async Task<(IEnumerable<dynamic>, IEnumerable<dynamic>)> QueryDynamicMultipleAsync2(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+        public (List<dynamic>, List<dynamic>) QueryDynamicMultiple2(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (
+                        reader.Read<dynamic>().ToList(),
+                        reader.Read<dynamic>().ToList()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+        public async Task<(IEnumerable<dynamic>, IEnumerable<dynamic>, IEnumerable<dynamic>)> QueryDynamicMultipleAsync3(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+
+        public (List<dynamic>, List<dynamic>, List<dynamic>) QueryDynamicMultiple3(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (reader.Read<dynamic>().ToList(),
+                    reader.Read<dynamic>().ToList(),
+                    reader.Read<dynamic>().ToList()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+
+        public async Task<(IEnumerable<dynamic>, IEnumerable<dynamic>, IEnumerable<dynamic>, IEnumerable<dynamic>, IEnumerable<dynamic>)> QueryDynamicMultipleAsync5(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>(),
+                    await reader.ReadAsync<dynamic>()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+        public (List<dynamic>, List<dynamic>, List<dynamic>, List<dynamic>, List<dynamic>) QueryDynamicMultiple5(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (reader.Read<dynamic>().ToList(),
+                    reader.Read<dynamic>().ToList(),
+                    reader.Read<dynamic>().ToList(),
+                    reader.Read<dynamic>().ToList(),
+                    reader.Read<dynamic>().ToList()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+        public async Task<(IEnumerable<T1>, IEnumerable<T2>, IEnumerable<T3>, IEnumerable<T4>)> QueryMultipleAsync<T1, T2, T3, T4>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (await reader.ReadAsync<T1>(),
+                    await reader.ReadAsync<T2>(),
+                    await reader.ReadAsync<T3>(),
+                    await reader.ReadAsync<T4>()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+        public (List<T1>, List<T2>, List<T3>, List<T4>) QueryMultiple<T1, T2, T3, T4>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (reader.Read<T1>().ToList(),
+                    reader.Read<T2>().ToList(),
+                    reader.Read<T3>().ToList(),
+                    reader.Read<T4>().ToList()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+
+        public async Task<(IEnumerable<T1>, IEnumerable<T2>, IEnumerable<T3>, IEnumerable<T4>, IEnumerable<T5>)> QueryMultipleAsync<T1, T2, T3, T4, T5>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return await ExecuteAsync(async (conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = await conn.QueryMultipleAsync(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (await reader.ReadAsync<T1>(),
+                    await reader.ReadAsync<T2>(),
+                    await reader.ReadAsync<T3>(),
+                    await reader.ReadAsync<T4>(),
+                    await reader.ReadAsync<T5>()
+                    );
+                }
+            }, beginTransaction);
+        }
+
+        public (List<T1>, List<T2>, List<T3>, List<T4>, List<T5>) QueryMultiple<T1, T2, T3, T4, T5>(string cmd, object param, CommandType? commandType = null, bool beginTransaction = false)
+        {
+            return Execute((conn, dbTransaction) =>
+            {
+                using (SqlMapper.GridReader reader = conn.QueryMultiple(cmd, param, dbTransaction, commandType: commandType ?? CommandType.Text, commandTimeout: commandTimeout))
+                {
+                    return (reader.Read<T1>().ToList(),
+                    reader.Read<T2>().ToList(),
+                    reader.Read<T3>().ToList(),
+                    reader.Read<T4>().ToList(),
+                    reader.Read<T5>().ToList()
+                    );
                 }
             }, beginTransaction);
         }
@@ -307,7 +613,7 @@ namespace VOL.Core.Dapper
         /// <param name="updateFileds">指定更新的字段x=new {x.a,x.b}</param>
         /// <param name="beginTransaction">是否开启事务</param>
         /// <returns></returns>
-        public int Update<T>(T entity, Expression<Func<T, object>> updateFileds = null, bool beginTransaction = true)
+        public int Update<T>(T entity, Expression<Func<T, object>> updateFileds = null, bool beginTransaction = false)
         {
             return UpdateRange<T>(new T[] { entity }, updateFileds, beginTransaction);
         }
@@ -320,7 +626,7 @@ namespace VOL.Core.Dapper
         /// <param name="updateFileds">批定更新字段</param>
         /// <param name="beginTransaction"></param>
         /// <returns></returns>
-        public int UpdateRange<T>(IEnumerable<T> entities, Expression<Func<T, object>> updateFileds = null, bool beginTransaction = true)
+        public int UpdateRange<T>(IEnumerable<T> entities, Expression<Func<T, object>> updateFileds = null, bool beginTransaction = false)
         {
             Type entityType = typeof(T);
             var key = entityType.GetKeyProperty();
@@ -345,53 +651,31 @@ namespace VOL.Core.Dapper
                 }
                 string sqltext = $@"UPDATE { entityType.GetEntityTableName()} SET {string.Join(",", paramsList)} WHERE {entityType.GetKeyName()} = @{entityType.GetKeyName()} ;";
 
-                return ExcuteNonQuery(sqltext, entities, CommandType.Text, true);
+                return ExcuteNonQuery(sqltext, entities, CommandType.Text, beginTransaction);
                 // throw new Exception("mysql批量更新未实现");
             }
             string fileds = string.Join(",", properties.Select(x => $" a.{x.Name}=b.{x.Name}").ToArray());
             string sql = $"update  a  set {fileds} from  {entityType.GetEntityTableName()} as a inner join {EntityToSqlTempName.TempInsert.ToString()} as b on a.{key.Name}=b.{key.Name}";
             sql = entities.ToList().GetEntitySql(true, sql, null, updateFileds, null);
-            return ExcuteNonQuery(sql, null, CommandType.Text, true);
+            return ExcuteNonQuery(sql, null, CommandType.Text, beginTransaction);
         }
 
-        public int DelWithKey<T>(bool beginTransaction = false, params object[] keys)
-        {
-            Type entityType = typeof(T);
-            var keyProperty = entityType.GetKeyProperty();
-            if (keyProperty == null || keys == null || keys.Length == 0) return 0;
 
-            IEnumerable<(bool, string, object)> validation = keyProperty.ValidationValueForDbType(keys);
-            if (validation.Any(x => !x.Item1))
-            {
-                throw new Exception($"主键类型【{validation.Where(x => !x.Item1).Select(s => s.Item3).FirstOrDefault()}】不正确");
-            }
-            string tKey = entityType.GetKeyProperty().Name;
-            FieldType fieldType = entityType.GetFieldType();
-            string joinKeys = (fieldType == FieldType.Int || fieldType == FieldType.BigInt)
-                 ? string.Join(",", keys)
-                 : $"'{string.Join("','", keys)}'";
-            string sql;
-            // 2020.08.06增加pgsql删除功能
-            if (DBType.Name == DbCurrentType.PgSql.ToString())
-            {
-                sql = $"DELETE FROM \"public\".\"{entityType.GetEntityTableName()}\" where \"{tKey}\" in ({joinKeys});";
-            }
-            else
-            {
-                sql = $"DELETE FROM {entityType.GetEntityTableName() } where {tKey} in ({joinKeys});";
-            }
-
-            return ExcuteNonQuery(sql, null);
-        }
         /// <summary>
         /// 使用key批量删除
+        /// 调用方式：
+        ///    List<int> keys = new List<int>();
+        ///    DBServerProvider.SqlDapper.DelWithKey<Sys_Log, int>(keys);
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="keys"></param>
         /// <returns></returns>
-        public int DelWithKey<T>(params object[] keys)
+        public int DelWithKey<T, KeyType>(IEnumerable<KeyType> keys)
         {
-            return DelWithKey<T>(false, keys);
+            Type entityType = typeof(T);
+            var keyProperty = entityType.GetKeyProperty();
+            string sql = $"DELETE FROM {entityType.GetEntityTableName() } where {keyProperty.Name} in @keys ";
+            return ExcuteNonQuery(sql, new { keys }).GetInt();
         }
         /// <summary>
         /// 通过Bulk批量插入
@@ -403,7 +687,7 @@ namespace VOL.Core.Dapper
         /// <returns></returns>
         private int MSSqlBulkInsert(DataTable table, string tableName, SqlBulkCopyOptions sqlBulkCopyOptions = SqlBulkCopyOptions.UseInternalTransaction, string dbKeyName = null)
         {
-            using (var Connection = DBServerProvider.GetDbConnection(_connectionString))
+            using (var Connection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
             {
                 if (!string.IsNullOrEmpty(dbKeyName))
                 {
@@ -443,6 +727,7 @@ namespace VOL.Core.Dapper
             if (DBType.Name == "PgSql")
             {
                 PGSqlBulkInsert(table, tableName);
+                return table.Rows.Count;
             }
             return MSSqlBulkInsert(table, tableName, sqlBulkCopyOptions ?? SqlBulkCopyOptions.KeepIdentity);
         }
@@ -457,14 +742,14 @@ namespace VOL.Core.Dapper
         private int MySqlBulkInsert(DataTable table, string tableName, string fileName = null, string tmpPath = null)
         {
             if (table.Rows.Count == 0) return 0;
-            tmpPath = tmpPath ?? FileHelper.GetCurrentDownLoadPath();
+            // tmpPath = tmpPath ?? FileHelper.GetCurrentDownLoadPath();
             int insertCount = 0;
             string csv = DataTableToCsv(table);
             string text = $"当前行:{table.Rows.Count}";
             MemoryStream stream = null;
             try
             {
-                using (var Connection = DBServerProvider.GetDbConnection(_connectionString))
+                using (var Connection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType))
                 {
                     if (Connection.State == ConnectionState.Closed)
                     {
@@ -476,7 +761,9 @@ namespace VOL.Core.Dapper
                         {
                             LineTerminator = "\n",
                             TableName = tableName,
-                            CharacterSet = "UTF8"
+                            CharacterSet = "UTF8",
+                            FieldQuotationCharacter = '"',
+                            FieldQuotationOptional = true
                         };
                         var array = Encoding.UTF8.GetBytes(csv);
                         using (stream = new MemoryStream(array))
@@ -493,10 +780,25 @@ namespace VOL.Core.Dapper
             }
             catch (Exception ex)
             {
-                throw ex;
+                if (ex.Message.StartsWith("vol:"))
+                {
+                    return 0;
+                }
+                if (ex.Message.Contains("local data is disabled"))
+                {
+                    try
+                    {
+                        DBServerProvider.SqlDapper.ExcuteNonQuery("set global local_infile = 'ON';", null);
+                    }
+                    catch (Exception e)
+                    {
+
+                        Console.WriteLine($"开启mysql日志写入异常:{e.Message}");
+                    }
+                }
+                throw new Exception("vol:" + ex.Message, ex.InnerException);
             }
             return insertCount;
-            //   File.Delete(path);
         }
         /// <summary>
         ///将DataTable转换为标准的CSV
@@ -519,9 +821,10 @@ namespace VOL.Core.Dapper
                 {
                     colum = table.Columns[i];
                     if (i != 0) sb.Append("\t");
-                    if (colum.DataType == typeString && row[colum].ToString().Contains(","))
+                    if (colum.DataType == typeString)
                     {
-                        sb.Append(row[colum].ToString());
+                        var data = $"\"{row[colum].ToString().Replace("\"", "\"\"")}\"";
+                        sb.Append(data);
                     }
                     else if (colum.DataType == typeDate)
                     {
@@ -564,6 +867,101 @@ namespace VOL.Core.Dapper
                     }
                     writer.Complete();
                 }
+            }
+        }
+
+
+
+
+
+        public DataTable QueryDataTable(string sql, object dbParameter, CommandType commandType = CommandType.Text)
+        {
+            return Execute<DataTable>((conn, dbTransaction) =>
+            {
+                using var dataReader = conn.ExecuteReader(sql, dbParameter, dbTransaction, commandType: commandType, commandTimeout: commandTimeout);
+                DataTable datatable = new DataTable();
+
+                for (int i = 0; i < dataReader.FieldCount; i++)
+                {
+                    DataColumn myDataColumn = new DataColumn();
+                    myDataColumn.ColumnName = dataReader.GetName(i);
+                    datatable.Columns.Add(myDataColumn);
+                }
+                while (dataReader.Read())
+                {
+                    DataRow myDataRow = datatable.NewRow();
+                    for (int i = 0; i < dataReader.FieldCount; i++)
+                    {
+                        try
+                        {
+                            myDataRow[i] = dataReader[i].ToString();
+                        }
+                        catch (Exception ex)
+                        {
+
+                            Console.WriteLine(ex.Message);
+                        }
+                    }
+                    datatable.Rows.Add(myDataRow);
+                    myDataRow = null;
+                }
+                return datatable;
+            }, false);
+        }
+        /// <summary>
+        /// 开启事务
+        /// </summary>
+        /// <returns></returns>
+        public ISqlDapper BeginTrans()
+        {
+            _transaction = true;
+            _transactionConnection = DBServerProvider.GetDbConnection(_connectionString, _dbCurrentType);
+            _transactionConnection.Open();
+            dbTransaction = _transactionConnection.BeginTransaction();
+            return this;
+        }
+
+        /// <summary>
+        /// 提交
+        /// </summary>
+        public void Commit()
+        {
+            try
+            {
+                _transaction = false;
+                dbTransaction.Commit();
+            }
+            catch (Exception ex)
+            {
+
+                throw ex;
+            }
+            finally
+            {
+                _transactionConnection?.Dispose();
+                dbTransaction?.Dispose();
+            }
+
+        }
+        /// <summary>
+        /// 回滚
+        /// </summary>
+        public void Rollback()
+        {
+            try
+            {
+                _transaction = false;
+                dbTransaction?.Rollback();
+            }
+            catch (Exception ex)
+            {
+
+                throw ex;
+            }
+            finally
+            {
+                _transactionConnection?.Dispose();
+                dbTransaction?.Dispose();
             }
         }
 

@@ -35,17 +35,18 @@
     <!--导入excel功能-->
     <!--2020.10.31添加导入前的方法-->
     <!--开启懒加载2020.12.06 -->
+    <!-- 2022.01.08增加明细表导入判断 -->
     <vol-box
       v-if="upload.url"
       :model.sync="upload.excel"
       :height="285"
       :width="600"
       :lazy="true"
-      :title="table.cnName + '--导入'"
+      :title="(boxModel ? detailOptions.cnName : table.cnName) + '-导入'"
     >
       <UploadExcel
         ref="upload_excel"
-        @importExcelAfter="importAfter"
+        @importExcelAfter="importExcelAfter"
         :importExcelBefore="importExcelBefore"
         :url="upload.url"
         :template="upload.template"
@@ -53,11 +54,11 @@
     </vol-box>
 
     <!--头部自定义组件-->
-    <gridHeader
+    <component
+      :is="dynamicComponent.gridHeader"
       ref="gridHeader"
-      class="grid-header"
       @parentCall="parentCall"
-    ></gridHeader>
+    ></component>
     <!--主界面查询与table表单布局-->
     <div class="view-container">
       <!-- 2020.09.11增加固定查询表单 -->
@@ -70,7 +71,7 @@
           <!-- 2020.09.13增加formFileds拼写错误兼容处理 -->
           <vol-form
             ref="searchForm"
-            style="padding:0 15px;"
+            style="padding: 0 15px"
             :label-width="labelWidth"
             :formRules="searchFormOptions"
             :formFields="_searchFormFields"
@@ -93,7 +94,7 @@
               </Button>
             </div>
           </vol-form>
-           <div v-if="fiexdSearchForm" class="fs-line"></div>
+          <div v-if="fiexdSearchForm" class="fs-line"></div>
         </div>
         <div class="view-header">
           <div class="desc-text">
@@ -104,7 +105,7 @@
             <a class="text" :title="extend.text">{{ extend.text }}</a>
           </div>
           <!--快速查询字段-->
-          <div class="search-line">
+          <div class="search-line"  v-if="!fiexdSearchForm">
             <QuickSearch
               v-if="singleSearch"
               :singleSearch="singleSearch"
@@ -159,14 +160,15 @@
           :width="boxOptions.width"
           :height="boxOptions.height"
           :padding="0"
+          :on-model-close="onModelClose"
         >
           <!--明细头部自定义组件-->
           <div class="iview-com" slot="content">
-            <modelHeader
+            <component
+              :is="dynamicComponent.modelHeader"
               ref="modelHeader"
-              class="model-header"
               @parentCall="parentCall"
-            ></modelHeader>
+            ></component>
             <div class="item form-item">
               <div class="form-text v-text">
                 <span class="title">
@@ -183,12 +185,13 @@
               ></vol-form>
             </div>
             <!--明细body自定义组件-->
-            <modelBody
-              class="model-body"
+            <component
+              :is="dynamicComponent.modelBody"
               ref="modelBody"
               @parentCall="parentCall"
-            ></modelBody>
+            ></component>
             <div
+             v-show="hasDetail"
               v-if="detail.columns && detail.columns.length > 0"
               class="grid-detail table-item item"
             >
@@ -240,11 +243,11 @@
               ></vol-table>
             </div>
             <!--明细footer自定义组件-->
-            <modelFooter
+            <component
+              :is="dynamicComponent.modelFooter"
               ref="modelFooter"
-              class="model-footer"
               @parentCall="parentCall"
-            ></modelFooter>
+            ></component>
           </div>
 
           <div slot="footer">
@@ -259,7 +262,15 @@
               <Icon :type="btn.icon" />
               {{ btn.name }}
             </Button>
-            <Button type="info" @click="boxModel = false">
+            <!-- 2021.07.11增加弹出框关闭事件 -->
+            <Button
+              type="info"
+              @click="
+                () => {
+                  onModelClose(false);
+                }
+              "
+            >
               <Icon type="md-close" />关闭
             </Button>
           </div>
@@ -267,7 +278,11 @@
       </div>
       <!--body自定义组件-->
       <div class="grid-body">
-        <gridBody ref="gridBody" @parentCall="parentCall"></gridBody>
+        <component
+          :is="dynamicComponent.gridBody"
+          ref="gridBody"
+          @parentCall="parentCall"
+        ></component>
       </div>
 
       <!--table表格-->
@@ -305,11 +320,11 @@
     </div>
 
     <!--footer自定义组件-->
-    <gridFooter
+    <component
+      :is="dynamicComponent.gridFooter"
       ref="gridFooter"
-      class="grid-footer"
       @parentCall="parentCall"
-    ></gridFooter>
+    ></component>
   </div>
 </template>
 
@@ -327,29 +342,14 @@ const _const = {
   IMPORT: "Import", //导入(导入表的Excel功能)
   UPLOAD: "Upload", //上传文件
 };
-const comName = [
-  "gridHeader",
-  "gridBody",
-  "gridFooter",
-  "modelHeader",
-  "modelBody",
-  "modelFooter",
-];
 import Empty from "@/components/basic/Empty.vue";
 var $viewGridVue, $this;
-let _components = {
-  gridHeader: Empty,
-  gridBody: Empty,
-  gridFooter: Empty,
-  modelHeader: Empty,
-  modelBody: Empty,
-  modelFooter: Empty,
-};
+
 import VolTable from "@/components/basic/VolTable.vue";
+import VolForm from "@/components/basic/VolForm.vue";
 var vueParam = {
   components: {
-    ..._components,
-    VolForm: () => import("@/components/basic/VolForm.vue"),
+    VolForm,
     VolBoxForm: () => import("@/components/basic/VolBoxForm.vue"),
     VolTable: VolTable, //() => import("@/components/basic/VolTable.vue"),
     VolBox: () => import("@/components/basic/VolBox.vue"),
@@ -360,6 +360,15 @@ var vueParam = {
   props: {},
   data() {
     return {
+      dynamicComponent: {
+        //2021.07.17调整扩展组件组件
+        gridHeader: Empty,
+        gridBody: Empty,
+        gridFooter: Empty,
+        modelHeader: Empty,
+        modelBody: Empty,
+        modelFooter: Empty,
+      },
       //树形结构的主键字段，如果设置值默认会开启树形table；注意rowKey字段的值必须是唯一（2021.05.02）
       rowKey: undefined,
       _searchFormFields: {}, //2020.09.13增加formFileds拼写错误兼容处理
@@ -478,20 +487,7 @@ var vueParam = {
       },
     };
   },
-  methods: {
-    //方法已放到ViewGridConfig文件夹下，加载时会合并ViewGridConfig下的方法到methods中
-    mergeComponents() {
-      if (this.extend.components) {
-        for (const key in this.extend.components) {
-          if (this.extend.components[key]) {
-            this.$options.components[key] = this.extend.components[key];
-          } else {
-            this.$options.components[key] = Empty;
-          }
-        }
-      }
-    },
-  },
+  methods: {},
   activated() {
     //2020.06.25增加activated方法
     this.onActivated && this.onActivated();
@@ -502,7 +498,6 @@ var vueParam = {
     if (this.activatedLoad) {
       this.refresh();
     }
-    this.mergeComponents();
   },
   mounted() {
     this.mounted();
@@ -524,13 +519,18 @@ var vueParam = {
     $viewGridVue = this;
     $this = this;
     //合并扩展组件
-    this.mergeComponents();
+    if (this.extend.components) {
+      for (const key in this.extend.components) {
+        this.dynamicComponent[key] = this.extend.components[key];
+      }
+    }
     //合并自定义业务扩展方法
     if (this.extend.methods) {
       for (const key in this.extend.methods) {
         this[key] = this.extend.methods[key];
       }
     }
+
     //如果没有指定排序字段，则用主键作为默认排序字段
     this.pagination.sortName = this.table.sortName || this.table.key;
     this.initBoxButtons(); //初始化弹出框与明细表格按钮
@@ -559,11 +559,9 @@ vueParam.methods = Object.assign(
 );
 // vueParam.methods=methods;
 export default vueParam;
-
-
 </script>
 <style lang="less" scoped>
-  @import "../../assets/css/ViewGrid.less";
+@import "../../assets/css/ViewGrid.less";
 </style>
 <style scoped>
 .btn-group >>> .ivu-select-dropdown {
@@ -585,7 +583,7 @@ export default vueParam;
 .view-model-content {
   background: #eee;
 }
-.grid-detail >>> .v-table  .el-table__header th {
+.grid-detail >>> .v-table .el-table__header th {
   height: 41px;
 }
 </style>

@@ -203,6 +203,13 @@ namespace VOL.Core.Extensions
             ConstantExpression constant = proType.ToString() == "System.String"
                 ? Expression.Constant(propertyValue) : Expression.Constant(propertyValue.ToString().ChangeType(proType));
 
+            // DateTime只选择了日期的时候自动在结束日期加一天，修复DateTime类型使用日期区间查询无法查询到结束日期的问题
+            if ((proType == typeof(DateTime) || proType == typeof(DateTime?)) && expressionType == LinqExpressionType.LessThanOrEqual && propertyValue.ToString().Length == 10)
+            {
+                expressionType = LinqExpressionType.LessThan;
+                constant = Expression.Constant(Convert.ToDateTime(propertyValue.ToString()).AddDays(1));
+            }
+
             UnaryExpression member = Expression.Convert(memberProperty, constant.Type);
             Expression<Func<T, bool>> expression;
             switch (expressionType)
@@ -246,6 +253,16 @@ namespace VOL.Core.Extensions
                         expression = Expression.Lambda<Func<T, bool>>(Expression.Not(Expression.Call(member, method, constant)), parameter);
                     }
                     break;
+                case LinqExpressionType.StartsWith:
+                    MethodInfo method2 = typeof(string).GetMethod("StartsWith", new[] { typeof(string) });
+                    constant = Expression.Constant(propertyValue, typeof(string));
+                    expression = Expression.Lambda<Func<T, bool>>(Expression.Call(member, method2, constant), parameter);
+                    break;
+                case LinqExpressionType.EndsWith:
+                    MethodInfo method3 = typeof(string).GetMethod("EndWith", new[] { typeof(string) });
+                    constant = Expression.Constant(propertyValue, typeof(string));
+                    expression = Expression.Lambda<Func<T, bool>>(Expression.Call(member, method3, constant), parameter);
+                    break;
                 default:
                     // p => p.false
                     expression = False<T>();
@@ -275,7 +292,12 @@ namespace VOL.Core.Extensions
                 exp.Arguments[0] is MemberExpression ?
                 (exp.Arguments[0] as MemberExpression).Member.Name.ToString()
                 : ((exp.Arguments[0] as UnaryExpression).Operand as MemberExpression).Member.Name,
-                 (QueryOrderBy)((exp.Arguments[1] as ConstantExpression).Value));
+                 (QueryOrderBy)(
+                 exp.Arguments[1] as ConstantExpression != null
+                  ? (exp.Arguments[1] as ConstantExpression).Value
+                 //2021.07.04增加自定排序按条件表达式
+                 : Expression.Lambda<Func<QueryOrderBy>>(exp.Arguments[1] as Expression).Compile()()
+                 ));
             }
         }
 
@@ -315,7 +337,7 @@ namespace VOL.Core.Extensions
 
             IOrderedQueryable<TEntity> queryableOrderBy = null;
             //  string orderByKey = orderByKeys[^1];
-            string orderByKey = orderByKeys[orderByKeys.Length-1];
+            string orderByKey = orderByKeys[orderByKeys.Length - 1];
             queryableOrderBy = orderBySelector[orderByKey] == QueryOrderBy.Desc
                 ? queryableOrderBy = queryable.OrderByDescending(orderByKey.GetExpression<TEntity>())
                 : queryable.OrderBy(orderByKey.GetExpression<TEntity>());
